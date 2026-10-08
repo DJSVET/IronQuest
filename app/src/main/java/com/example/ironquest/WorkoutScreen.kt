@@ -40,8 +40,10 @@ fun WorkoutScreen(
         pullUps: Int,
         dips: Int,
         pushUps: Int
-    ) -> Unit
+    ) -> Unit,
+    onBack: () -> Unit
 ) {
+
     val background = Color(0xFF17151C)
     val panel = Color(0xFF25212D)
     val accent = Color(0xFFE6A23C)
@@ -61,12 +63,42 @@ fun WorkoutScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        Text(
-            text = "⚔ ТРЕНИРОВКА",
-            color = accent,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 15.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = onBack,
+                modifier = Modifier.height(40.dp),
+                shape = RoundedCornerShape(6.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF3A3442)
+                )
+            ) {
+                Text(
+                    text = "←",
+                    color = text,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            Text(
+                text = "⚔ ТРЕНИРОВКА",
+                color = accent,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            Spacer(modifier = Modifier.height(1.dp))
+        }
+
 
         Spacer(modifier = Modifier.height(20.dp))
 

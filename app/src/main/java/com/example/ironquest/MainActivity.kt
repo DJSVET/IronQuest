@@ -69,16 +69,40 @@ fun IronQuestApp() {
             )
         )
 
+    val levelInfo = getLevelInfo(playerStats.xp)
+
+    val level = levelInfo.level
+    val levelXp = levelInfo.currentXp
+    val levelRequiredXp = levelInfo.requiredXp
+
+    val workoutHistory by WorkoutHistoryData
+        .getHistory(context)
+        .collectAsState(initial = emptyList())
+
+    val currentStreak = calculateStreak(workoutHistory)
+
+    val achievements = getAchievements(
+        history = workoutHistory,
+        totalXp = playerStats.xp,
+        streak = currentStreak
+    )
+
+    val unlockedAchievements = achievements.count {
+        it.unlocked
+    }
+
+
+
     var showWorkout by remember { mutableStateOf(false) }
     var showResult by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    var showAchievements by remember { mutableStateOf(false) }
     var lastXp by remember { mutableStateOf(0) }
 
     if (showWorkout) {
 
         WorkoutScreen(
             onFinish = { xp, armsReps, shouldersReps, backReps, chestReps, pullUps, dips, pushUps ->
-
                 lastXp = xp
 
                 scope.launch {
@@ -102,6 +126,9 @@ fun IronQuestApp() {
 
                 showWorkout = false
                 showResult = true
+            },
+            onBack = {
+                showWorkout = false
             }
         )
 
@@ -133,8 +160,17 @@ fun IronQuestApp() {
         return
     }
 
-    val level = (playerStats.xp / 100) + 1
-    val levelXp = playerStats.xp % 100
+    if (showAchievements) {
+
+        AchievementsScreen(
+            achievements = achievements,
+            onBack = {
+                showAchievements = false
+            }
+        )
+
+        return
+    }
 
     MaterialTheme {
 
@@ -173,7 +209,7 @@ fun IronQuestApp() {
                 )
 
                 Text(
-                    text = "$levelXp / 100 XP",
+                    text = "$levelXp / $levelRequiredXp XP",
                     color = secondaryText,
                     fontSize = 14.sp
                 )
@@ -194,7 +230,10 @@ fun IronQuestApp() {
 
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(levelXp / 100f)
+                            .fillMaxWidth(
+                                (levelXp.toFloat() / levelRequiredXp.toFloat())
+                                    .coerceIn(0f, 1f)
+                            )
                             .height(14.dp)
                             .background(
                                 accent,
@@ -286,13 +325,13 @@ fun IronQuestApp() {
                 ) {
 
                     Text(
-                        text = "🔥 Серия: 0",
+                        text = "🔥 Серия: $currentStreak",
                         color = secondaryText,
                         fontSize = 14.sp
                     )
 
                     Text(
-                        text = "🏆 Достижения: 0",
+                        text = "🏆 Достижения: $unlockedAchievements/${achievements.size}",
                         color = secondaryText,
                         fontSize = 14.sp
                     )
@@ -315,6 +354,29 @@ fun IronQuestApp() {
                 ) {
                     Text(
                         text = "📜 ИСТОРИЯ ТРЕНИРОВОК",
+                        color = text,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                Button(
+                    onClick = {
+                        showAchievements = true
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(6.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF3A3442)
+                    )
+                ) {
+                    Text(
+                        text = "🏆 ДОСТИЖЕНИЯ",
                         color = text,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold

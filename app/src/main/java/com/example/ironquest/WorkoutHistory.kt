@@ -127,12 +127,41 @@ fun WorkoutHistoryScreen(
             .padding(20.dp)
     ) {
 
-        Text(
-            text = "📜 ИСТОРИЯ",
-            color = accent,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 15.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = onBack,
+                modifier = Modifier.height(40.dp),
+                shape = RoundedCornerShape(6.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF3A3442)
+                )
+            ) {
+                Text(
+                    text = "←",
+                    color = text,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            Text(
+                text = "📜 ИСТОРИЯ",
+                color = accent,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            Spacer(modifier = Modifier.height(1.dp))
+        }
 
         Spacer(
             modifier = Modifier.height(20.dp)
@@ -220,28 +249,6 @@ fun WorkoutHistoryScreen(
                     )
                 }
             }
-        }
-
-        Spacer(
-            modifier = Modifier.height(20.dp)
-        )
-
-        Button(
-            onClick = onBack,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(55.dp),
-            shape = RoundedCornerShape(6.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF3A3442)
-            )
-        ) {
-            Text(
-                text = "← НАЗАД",
-                color = text,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }
