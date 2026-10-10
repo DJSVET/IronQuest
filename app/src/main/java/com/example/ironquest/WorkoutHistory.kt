@@ -2,6 +2,7 @@ package com.example.ironquest
 
 import android.content.Context
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -109,11 +111,11 @@ fun WorkoutHistoryScreen(
     context: Context,
     onBack: () -> Unit
 ) {
-    val background = Color(0xFF17151C)
-    val panel = Color(0xFF25212D)
-    val accent = Color(0xFFE6A23C)
-    val text = Color(0xFFF3E8D0)
-    val secondaryText = Color(0xFFA99FB2)
+    val background = Color(0xFF080F1B)
+    val panel = Color(0xFF111E30)
+    val accent = Color(0xFFB8FF5C)
+    val text = Color(0xFFE7F0FF)
+    val secondaryText = Color(0xFF8194AD)
 
     val history by WorkoutHistoryData
         .getHistory(context)
@@ -138,7 +140,7 @@ fun WorkoutHistoryScreen(
                 modifier = Modifier.height(40.dp),
                 shape = RoundedCornerShape(6.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF3A3442)
+                    containerColor = Color(0xFF223148)
                 )
             ) {
                 Text(
@@ -151,12 +153,10 @@ fun WorkoutHistoryScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            Text(
-                text = "📜 ИСТОРИЯ",
-                color = accent,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(painterResource(R.drawable.icon_history), null, Modifier.height(30.dp))
+                Text("ИСТОРИЯ", color = text, fontSize = 22.sp, fontWeight = FontWeight.Black)
+            }
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -201,7 +201,7 @@ fun WorkoutHistoryScreen(
         } else {
 
             Text(
-                text = "📈 ПРОГРЕСС",
+                text = "ПРОГРЕСС",
                 color = text,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
@@ -462,30 +462,27 @@ fun WorkoutHistoryCard(
             modifier = Modifier.height(10.dp)
         )
 
-        Text(
-            text = "🪽 Подтягивания: ${workout.pullUps}",
-            color = text,
-            fontSize = 14.sp
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.icon_pullups), null, Modifier.height(24.dp))
+            Text("Подтягивания: ${workout.pullUps}", color = text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+        }
 
         Spacer(
             modifier = Modifier.height(5.dp)
         )
 
-        Text(
-            text = "🦾 Брусья: ${workout.dips}",
-            color = text,
-            fontSize = 14.sp
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.icon_dips), null, Modifier.height(24.dp))
+            Text("Брусья: ${workout.dips}", color = text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+        }
 
         Spacer(
             modifier = Modifier.height(5.dp)
         )
 
-        Text(
-            text = "💪 Отжимания: ${workout.pushUps}",
-            color = text,
-            fontSize = 14.sp
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.icon_pushups), null, Modifier.height(24.dp))
+            Text("Отжимания: ${workout.pushUps}", color = text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+        }
     }
 }

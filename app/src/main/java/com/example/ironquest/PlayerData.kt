@@ -3,6 +3,8 @@ package com.example.ironquest
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -26,6 +28,8 @@ object PlayerData {
     private val SHOULDERS_KEY = intPreferencesKey("shoulders_reps")
     private val BACK_KEY = intPreferencesKey("back_reps")
     private val CHEST_KEY = intPreferencesKey("chest_reps")
+    private val CLAIMED_ACHIEVEMENTS_KEY = stringSetPreferencesKey("claimed_achievements")
+    private val EQUIPMENT_SLOTS = listOf("head", "body", "hands", "feet")
 
     fun getStats(context: Context): Flow<PlayerStats> {
 
@@ -39,6 +43,85 @@ object PlayerData {
                 chestReps = preferences[CHEST_KEY] ?: 0
             )
         }
+    }
+
+    /** Начисляет награды за открытые достижения только один раз. */
+    suspend fun awardUnlockedAchievements(
+        context: Context,
+        achievements: List<Achievement>
+    ): Int {
+        var earnedXp = 0
+
+        context.dataStore.edit { preferences ->
+            val claimed = (preferences[CLAIMED_ACHIEVEMENTS_KEY] ?: emptySet()).toMutableSet()
+
+            achievements.forEach { achievement ->
+                if (achievement.unlocked && claimed.add(achievement.id)) {
+                    earnedXp += achievement.rewardXp
+                }
+            }
+
+            if (earnedXp > 0) {
+                preferences[XP_KEY] = (preferences[XP_KEY] ?: 0) + earnedXp
+            }
+
+            preferences[CLAIMED_ACHIEVEMENTS_KEY] = claimed
+        }
+
+        return earnedXp
+    }
+
+    /** Current item collection, including quantities for duplicate drops. */
+    fun getInventory(context: Context): Flow<List<InventoryEntry>> {
+        return context.dataStore.data.map { preferences ->
+            ITEM_CATALOG.mapNotNull { item ->
+                val count = preferences[intPreferencesKey("item_${item.id}")] ?: 0
+                if (count > 0) InventoryEntry(item = item, count = count) else null
+            }
+        }
+    }
+
+    /** Текущая экипировка персонажа: слот -> ID предмета. */
+    fun getEquipped(context: Context): Flow<Map<String, String>> = context.dataStore.data.map { preferences ->
+        EQUIPMENT_SLOTS.mapNotNull { slot ->
+            preferences[stringPreferencesKey("equipped_$slot")]?.let { itemId -> slot to itemId }
+        }.toMap()
+    }
+
+    /** Надевает найденный предмет. Нельзя надеть вещь, которой нет в инвентаре. */
+    suspend fun equipItem(context: Context, item: ItemDefinition): Boolean {
+        val slot = item.slot ?: return false
+        var equipped = false
+        context.dataStore.edit { preferences ->
+            val count = preferences[intPreferencesKey("item_${item.id}")] ?: 0
+            if (count > 0) {
+                preferences[stringPreferencesKey("equipped_$slot")] = item.id
+                equipped = true
+            }
+        }
+        return equipped
+    }
+
+    /** 70% шанс дропа. Шансы редкости: обычный 55%, необычный 25%, редкий 12%, эпический 6%, легендарный 2%. */
+    suspend fun rollAndSaveDrop(context: Context): ItemDefinition? {
+        if (kotlin.random.Random.nextInt(100) >= 70) return null
+
+        val rarityRoll = kotlin.random.Random.nextInt(100)
+        val rarity = when {
+            rarityRoll < 55 -> ItemRarity.COMMON
+            rarityRoll < 80 -> ItemRarity.UNCOMMON
+            rarityRoll < 92 -> ItemRarity.RARE
+            rarityRoll < 98 -> ItemRarity.EPIC
+            else -> ItemRarity.LEGENDARY
+        }
+        val candidates = ITEM_CATALOG.filter { it.rarity == rarity }
+        val item = candidates.randomOrNull() ?: ITEM_CATALOG.first()
+
+        context.dataStore.edit { preferences ->
+            val key = intPreferencesKey("item_${item.id}")
+            preferences[key] = (preferences[key] ?: 0) + 1
+        }
+        return item
     }
 
     suspend fun addWorkout(

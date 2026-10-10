@@ -1,5 +1,11 @@
 package com.example.ironquest
 
+import androidx.compose.foundation.Image
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -25,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,11 +52,11 @@ fun WorkoutScreen(
     onBack: () -> Unit
 ) {
 
-    val background = Color(0xFF17151C)
-    val panel = Color(0xFF25212D)
-    val accent = Color(0xFFE6A23C)
-    val text = Color(0xFFF3E8D0)
-    val secondaryText = Color(0xFFA99FB2)
+    val background = Color(0xFF080F1B)
+    val panel = Color(0xFF111E30)
+    val accent = Color(0xFFB8FF5C)
+    val text = Color(0xFFE7F0FF)
+    val secondaryText = Color(0xFF8194AD)
 
     val pullUps = remember { mutableStateListOf("") }
     val dips = remember { mutableStateListOf("") }
@@ -74,7 +82,7 @@ fun WorkoutScreen(
                 modifier = Modifier.height(40.dp),
                 shape = RoundedCornerShape(6.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF3A3442)
+                    containerColor = Color(0xFF223148)
                 )
             ) {
                 Text(
@@ -87,12 +95,10 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            Text(
-                text = "⚔ ТРЕНИРОВКА",
-                color = accent,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(painter = painterResource(R.drawable.icon_workout), contentDescription = null, modifier = Modifier.height(28.dp))
+                Text(text = "ТРЕНИРОВКА", color = text, fontSize = 20.sp, fontWeight = FontWeight.Black)
+            }
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -103,7 +109,7 @@ fun WorkoutScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         ExerciseBlock(
-            title = "🪽 Подтягивания",
+            title = "ПОДТЯГИВАНИЯ",
             sets = pullUps,
             onAddSet = {
                 pullUps.add("")
@@ -116,7 +122,7 @@ fun WorkoutScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         ExerciseBlock(
-            title = "🦾 Брусья",
+            title = "БРУСЬЯ",
             sets = dips,
             onAddSet = {
                 dips.add("")
@@ -129,7 +135,7 @@ fun WorkoutScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         ExerciseBlock(
-            title = "💪 Отжимания",
+            title = "ОТЖИМАНИЯ",
             sets = pushUps,
             onAddSet = {
                 pushUps.add("")
@@ -141,6 +147,12 @@ fun WorkoutScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+        val finishTransition = rememberInfiniteTransition(label = "finish_workout")
+        val finishScale by finishTransition.animateFloat(
+            initialValue = 1f, targetValue = 1.02f,
+            animationSpec = infiniteRepeatable(tween(750), repeatMode = RepeatMode.Reverse),
+            label = "finish_scale"
+        )
         Button(
             onClick = {
                 val pullUpsTotal =
@@ -182,14 +194,15 @@ fun WorkoutScreen(
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp),
+                .height(60.dp)
+                .graphicsLayer { scaleX = finishScale; scaleY = finishScale },
             shape = RoundedCornerShape(6.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = accent
             )
         ) {
             Text(
-                text = "★ ЗАВЕРШИТЬ ТРЕНИРОВКУ",
+                text = "ЗАВЕРШИТЬ ТРЕНИРОВКУ",
                 color = Color.Black,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
@@ -219,12 +232,16 @@ fun ExerciseBlock(
             .padding(15.dp)
     ) {
 
-        Text(
-            text = title,
-            color = text,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
+        val exerciseIcon = when {
+            title.contains("ПОДТЯГИВАНИЯ") -> R.drawable.icon_pullups
+            title.contains("БРУСЬЯ") -> R.drawable.icon_dips
+            else -> R.drawable.icon_pushups
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painter = painterResource(exerciseIcon), contentDescription = null, modifier = Modifier.height(30.dp))
+            Text(text = title, color = text, fontSize = 16.sp, fontWeight = FontWeight.Black,
+                modifier = Modifier.padding(start = 10.dp))
+        }
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -265,7 +282,7 @@ fun ExerciseBlock(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(4.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF3A3442)
+                containerColor = Color(0xFF223148)
             )
         ) {
             Text(

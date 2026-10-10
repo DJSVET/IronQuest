@@ -1,9 +1,9 @@
 package com.example.ironquest
 
-import java.time.LocalDate
-import java.time.ZoneId
+import java.util.Calendar
+import java.util.Date
 
-data class LevelInfo(
+ data class LevelInfo(
     val level: Int,
     val currentXp: Int,
     val requiredXp: Int,
@@ -11,7 +11,6 @@ data class LevelInfo(
 )
 
 fun getLevelInfo(totalXp: Int): LevelInfo {
-
     var level = 1
     var xpSpent = 0
     var requiredForNext = 100
@@ -30,43 +29,44 @@ fun getLevelInfo(totalXp: Int): LevelInfo {
     )
 }
 
-fun calculateStreak(
-    history: List<WorkoutRecord>
-): Int {
+/** Returns the local calendar day's start time without using java.time (API 26+ only). */
+private fun startOfLocalDay(timestamp: Long): Long {
+    val calendar = Calendar.getInstance()
+    calendar.time = Date(timestamp)
+    calendar.set(Calendar.HOUR_OF_DAY, 0)
+    calendar.set(Calendar.MINUTE, 0)
+    calendar.set(Calendar.SECOND, 0)
+    calendar.set(Calendar.MILLISECOND, 0)
+    return calendar.timeInMillis
+}
 
-    if (history.isEmpty()) {
-        return 0
-    }
+/** Moves a local calendar date by whole days, correctly handling daylight-saving changes. */
+private fun shiftLocalDay(dayStart: Long, amount: Int): Long {
+    val calendar = Calendar.getInstance()
+    calendar.timeInMillis = dayStart
+    calendar.add(Calendar.DAY_OF_YEAR, amount)
+    return calendar.timeInMillis
+}
+
+fun calculateStreak(history: List<WorkoutRecord>): Int {
+    if (history.isEmpty()) return 0
 
     val workoutDays = history
-        .map {
-            java.time.Instant.ofEpochMilli(it.timestamp)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
-        }
+        .map { startOfLocalDay(it.timestamp) }
         .distinct()
         .sortedDescending()
 
-    if (workoutDays.isEmpty()) {
-        return 0
-    }
+    if (workoutDays.isEmpty()) return 0
 
-    val today = LocalDate.now()
-
+    val today = startOfLocalDay(System.currentTimeMillis())
+    val yesterday = shiftLocalDay(today, -1)
     val firstDay = workoutDays.first()
 
-    if (firstDay != today && firstDay != today.minusDays(1)) {
-        return 0
-    }
+    if (firstDay != today && firstDay != yesterday) return 0
 
     var streak = 1
-
     for (i in 1 until workoutDays.size) {
-
-        val previous = workoutDays[i - 1]
-        val current = workoutDays[i]
-
-        if (previous.minusDays(1) == current) {
+        if (shiftLocalDay(workoutDays[i - 1], -1) == workoutDays[i]) {
             streak++
         } else {
             break
@@ -79,7 +79,9 @@ fun calculateStreak(
 data class Achievement(
     val title: String,
     val description: String,
-    val unlocked: Boolean
+    val unlocked: Boolean,
+    val id: String = title,
+    val rewardXp: Int = 50
 )
 
 fun getAchievements(
@@ -87,59 +89,64 @@ fun getAchievements(
     totalXp: Int,
     streak: Int
 ): List<Achievement> {
-
-    val totalReps = history.sumOf {
-        it.pullUps + it.dips + it.pushUps
-    }
+    val totalReps = history.sumOf { it.pullUps + it.dips + it.pushUps }
 
     return listOf(
-
         Achievement(
-            title = "⚔ Первый шаг",
+            title = "Первый шаг",
             description = "Завершить первую тренировку",
-            unlocked = history.isNotEmpty()
+            unlocked = history.isNotEmpty(),
+            id = "first_workout",
+            rewardXp = 50
         ),
-
         Achievement(
-            title = "💪 Сотня",
+            title = "Сотня",
             description = "Сделать 100 повторений",
-            unlocked = totalReps >= 100
+            unlocked = totalReps >= 100,
+            id = "hundred_reps",
+            rewardXp = 75
         ),
-
         Achievement(
-            title = "🔥 Разогрев",
+            title = "Разогрев",
             description = "Достичь серии 3 дня",
-            unlocked = streak >= 3
+            unlocked = streak >= 3,
+            id = "streak_3",
+            rewardXp = 100
         ),
-
         Achievement(
-            title = "🔥 Железная воля",
+            title = "Железная воля",
             description = "Достичь серии 7 дней",
-            unlocked = streak >= 7
+            unlocked = streak >= 7,
+            id = "streak_7",
+            rewardXp = 250
         ),
-
         Achievement(
-            title = "⭐ Уровень 5",
+            title = "Уровень 5",
             description = "Достичь 5 уровня",
-            unlocked = getLevelInfo(totalXp).level >= 5
+            unlocked = getLevelInfo(totalXp).level >= 5,
+            id = "level_5",
+            rewardXp = 200
         ),
-
         Achievement(
-            title = "🏆 1000 XP",
+            title = "1000 XP",
             description = "Заработать 1000 XP",
-            unlocked = totalXp >= 1000
+            unlocked = totalXp >= 1000,
+            id = "xp_1000",
+            rewardXp = 300
         ),
-
         Achievement(
-            title = "🪽 Мастер подтягиваний",
+            title = "Мастер подтягиваний",
             description = "Сделать 100 подтягиваний",
-            unlocked = history.sumOf { it.pullUps } >= 100
+            unlocked = history.sumOf { it.pullUps } >= 100,
+            id = "pullups_100",
+            rewardXp = 150
         ),
-
         Achievement(
-            title = "🦾 Железные руки",
+            title = "Железные руки",
             description = "Сделать 500 повторений",
-            unlocked = totalReps >= 500
+            unlocked = totalReps >= 500,
+            id = "reps_500",
+            rewardXp = 200
         )
     )
 }
