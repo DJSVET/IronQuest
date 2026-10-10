@@ -11,6 +11,7 @@ import java.util.Date
 )
 
 fun getLevelInfo(totalXp: Int): LevelInfo {
+    // Level 1 -> 2 requires 100 XP; each following level costs 10 XP more.
     var level = 1
     var xpSpent = 0
     var requiredForNext = 100

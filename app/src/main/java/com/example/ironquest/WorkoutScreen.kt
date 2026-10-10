@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.painterResource
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun WorkoutScreen(
+    isSaving: Boolean = false,
     onFinish: (
         xp: Int,
         armsReps: Int,
@@ -96,7 +98,7 @@ fun WorkoutScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(painter = painterResource(R.drawable.icon_workout), contentDescription = null, modifier = Modifier.height(28.dp))
+                Image(painter = painterResource(R.drawable.icon_workout), contentDescription = null, modifier = Modifier.size(32.dp))
                 Text(text = "ТРЕНИРОВКА", color = text, fontSize = 20.sp, fontWeight = FontWeight.Black)
             }
 
@@ -197,12 +199,14 @@ fun WorkoutScreen(
                 .height(60.dp)
                 .graphicsLayer { scaleX = finishScale; scaleY = finishScale },
             shape = RoundedCornerShape(6.dp),
+            enabled = !isSaving,
             colors = ButtonDefaults.buttonColors(
-                containerColor = accent
+                containerColor = accent,
+                disabledContainerColor = Color(0xFF64705A)
             )
         ) {
             Text(
-                text = "ЗАВЕРШИТЬ ТРЕНИРОВКУ",
+                text = if (isSaving) "СОХРАНЕНИЕ..." else "ЗАВЕРШИТЬ ТРЕНИРОВКУ",
                 color = Color.Black,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
@@ -238,7 +242,7 @@ fun ExerciseBlock(
             else -> R.drawable.icon_pushups
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(painter = painterResource(exerciseIcon), contentDescription = null, modifier = Modifier.height(30.dp))
+            Image(painter = painterResource(exerciseIcon), contentDescription = null, modifier = Modifier.size(34.dp))
             Text(text = title, color = text, fontSize = 16.sp, fontWeight = FontWeight.Black,
                 modifier = Modifier.padding(start = 10.dp))
         }
@@ -263,8 +267,11 @@ fun ExerciseBlock(
 
                 TextField(
                     value = value,
-                    onValueChange = {
-                        sets[index] = it
+                    onValueChange = { newValue ->
+                        // Принимаем только цифры, чтобы нельзя было сохранить отрицательные или дробные повторы.
+                        if (newValue.all { it.isDigit() }) {
+                            sets[index] = newValue
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(0.45f),
                     singleLine = true,

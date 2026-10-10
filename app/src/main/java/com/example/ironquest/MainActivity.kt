@@ -128,42 +128,55 @@ fun IronQuestApp() {
     var showHistory by remember { mutableStateOf(false) }
     var showAchievements by remember { mutableStateOf(false) }
     var showInventory by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     var lastXp by remember { mutableStateOf(0) }
+    var lastTotalXp by remember { mutableStateOf(0) }
+    var isSavingWorkout by remember { mutableStateOf(false) }
     var lastDroppedItem by remember { mutableStateOf<ItemDefinition?>(null) }
 
     if (showWorkout) {
 
         WorkoutScreen(
+            isSaving = isSavingWorkout,
             onFinish = { xp, armsReps, shouldersReps, backReps, chestReps, pullUps, dips, pushUps ->
-                lastXp = xp
-                lastDroppedItem = null
+                if (!isSavingWorkout) {
+                    isSavingWorkout = true
+                    lastXp = xp
+                    lastDroppedItem = null
 
-                scope.launch {
-                    PlayerData.addWorkout(
-                        context = context,
-                        xp = xp,
-                        armsReps = armsReps,
-                        shouldersReps = shouldersReps,
-                        backReps = backReps,
-                        chestReps = chestReps
-                    )
+                    scope.launch {
+                        try {
+                            // Сначала полностью сохраняем тренировку и награды, и только потом открываем результат.
+                            PlayerData.addWorkout(
+                                context = context,
+                                xp = xp,
+                                armsReps = armsReps,
+                                shouldersReps = shouldersReps,
+                                backReps = backReps,
+                                chestReps = chestReps
+                            )
 
-                    WorkoutHistoryData.addWorkout(
-                        context = context,
-                        xp = xp,
-                        pullUps = pullUps,
-                        dips = dips,
-                        pushUps = pushUps
-                    )
+                            WorkoutHistoryData.addWorkout(
+                                context = context,
+                                xp = xp,
+                                pullUps = pullUps,
+                                dips = dips,
+                                pushUps = pushUps
+                            )
 
-                    lastDroppedItem = PlayerData.rollAndSaveDrop(context)
+                            val totalReps = pullUps + dips + pushUps
+                            lastDroppedItem = PlayerData.rollAndSaveDrop(context, totalReps)
+                            lastTotalXp = playerStats.xp + xp
+                            showWorkout = false
+                            showResult = true
+                        } finally {
+                            isSavingWorkout = false
+                        }
+                    }
                 }
-
-                showWorkout = false
-                showResult = true
             },
             onBack = {
-                showWorkout = false
+                if (!isSavingWorkout) showWorkout = false
             }
         )
 
@@ -174,7 +187,7 @@ fun IronQuestApp() {
 
         WorkoutResultScreen(
             xp = lastXp,
-            totalXp = playerStats.xp,
+            totalXp = lastTotalXp,
             droppedItem = lastDroppedItem,
             onContinue = {
                 showResult = false
@@ -193,6 +206,11 @@ fun IronQuestApp() {
             }
         )
 
+        return
+    }
+
+    if (showSettings) {
+        SettingsScreen(onBack = { showSettings = false })
         return
     }
 
@@ -247,16 +265,26 @@ fun IronQuestApp() {
                         letterSpacing = 2.sp
                     )
                 }
-                Box(
-                    modifier = Modifier
-                        .background(Color(0xFF1A2A40), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 12.dp, vertical = 9.dp)
-                ) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFF1A2A40), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 9.dp)
+                    ) {
+                        Text(
+                            text = "СЕРИЯ $currentStreak ДН.",
+                            color = Color(0xFFB8FF5C),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.height(5.dp))
                     Text(
-                        text = "СЕРИЯ $currentStreak ДН.",
-                        color = Color(0xFFB8FF5C),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "⚙ НАСТРОЙКИ",
+                        color = Color(0xFF8194AD),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { showSettings = true }
                     )
                 }
             }
@@ -269,7 +297,43 @@ fun IronQuestApp() {
                 TopGameIcon(R.drawable.icon_inventory, "ИНВЕНТАРЬ ${inventory.sumOf { it.count }}", Modifier.weight(1f)) { showInventory = true }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val ctaTransition = rememberInfiniteTransition(label = "workout_cta")
+            val ctaScale by ctaTransition.animateFloat(
+                initialValue = 1f, targetValue = 1.025f,
+                animationSpec = infiniteRepeatable(tween(800), repeatMode = RepeatMode.Reverse),
+                label = "cta_scale"
+            )
+            Button(
+                onClick = { showWorkout = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(58.dp)
+                    .graphicsLayer { scaleX = ctaScale; scaleY = ctaScale },
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFB8FF5C)
+                )
+            ) {
+                Text(
+                    text = "▶  НАЧАТЬ ТРЕНИРОВКУ",
+                    color = Color(0xFF080F1B),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "КАЖДАЯ ТРЕНИРОВКА — ШАГ К НОВОМУ УРОВНЮ",
+                color = Color(0xFF566178),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.7.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
 
             Column(
                 modifier = Modifier
@@ -349,6 +413,10 @@ fun IronQuestApp() {
                 )
             }
 
+            Spacer(modifier = Modifier.height(14.dp))
+
+            WorkoutComparisonCard(history = workoutHistory)
+
             Spacer(modifier = Modifier.height(18.dp))
 
             Row(
@@ -406,45 +474,107 @@ fun IronQuestApp() {
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            val ctaTransition = rememberInfiniteTransition(label = "workout_cta")
-            val ctaScale by ctaTransition.animateFloat(
-                initialValue = 1f, targetValue = 1.025f,
-                animationSpec = infiniteRepeatable(tween(800), repeatMode = RepeatMode.Reverse),
-                label = "cta_scale"
-            )
-            Button(
-                onClick = { showWorkout = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(58.dp)
-                    .graphicsLayer { scaleX = ctaScale; scaleY = ctaScale },
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFB8FF5C)
-                )
-            ) {
-                Text(
-                    text = "▶  НАЧАТЬ ТРЕНИРОВКУ",
-                    color = Color(0xFF080F1B),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.5.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "КАЖДАЯ ТРЕНИРОВКА — ШАГ К НОВОМУ УРОВНЮ",
-                color = Color(0xFF566178),
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.7.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
 
+
+
+@Composable
+private fun WorkoutComparisonCard(history: List<WorkoutRecord>) {
+    val panel = Color(0xFF111E30)
+    val text = Color(0xFFE7F0FF)
+    val secondary = Color(0xFF8194AD)
+    val accent = Color(0xFFB8FF5C)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(panel, RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Text(
+            text = "СРАВНЕНИЕ ТРЕНИРОВОК",
+            color = secondary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (history.isEmpty()) {
+            Text(
+                text = "Заверши первую тренировку, чтобы начать отслеживать прогресс",
+                color = text,
+                fontSize = 12.sp
+            )
+        } else {
+            val latest = history[0]
+            val latestTotal = latest.pullUps + latest.dips + latest.pushUps
+            val previous = history.getOrNull(1)
+            val previousTotal = previous?.let { it.pullUps + it.dips + it.pushUps }
+            val difference = if (previousTotal != null) latestTotal - previousTotal else 0
+            val differenceColor = when {
+                previousTotal == null -> secondary
+                difference > 0 -> Color(0xFF5CE1A0)
+                difference < 0 -> Color(0xFFFF6B78)
+                else -> secondary
+            }
+            val changeText = when {
+                previousTotal == null -> "НОВАЯ СТАТИСТИКА"
+                difference > 0 -> "↑ +$difference"
+                difference < 0 -> "↓ $difference"
+                else -> "→ 0"
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "ПОСЛЕДНЯЯ ТРЕНИРОВКА",
+                        color = secondary,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "$latestTotal повторений",
+                        color = text,
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    if (previousTotal != null) {
+                        Text(
+                            text = "Предыдущая: $previousTotal",
+                            color = secondary,
+                            fontSize = 11.sp
+                        )
+                    } else {
+                        Text(
+                            text = "Следующая тренировка покажет разницу",
+                            color = secondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = changeText,
+                        color = differenceColor,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = if (previousTotal == null) "" else "к прошлой",
+                        color = secondary,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
+    }
+}
 
 
 @Composable
@@ -515,7 +645,7 @@ private fun TopGameIcon(iconRes: Int, label: String, modifier: Modifier = Modifi
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Image(painter = painterResource(iconRes), contentDescription = label, modifier = Modifier.size(32.dp))
+        Image(painter = painterResource(iconRes), contentDescription = label, modifier = Modifier.size(40.dp))
         Spacer(Modifier.height(4.dp))
         Text(label, color = Color(0xFFB8C7DD), fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
@@ -547,7 +677,7 @@ fun PixelStatCard(
                 Image(
                     painter = painterResource(iconRes),
                     contentDescription = title,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(35.dp)
                 )
             }
             Spacer(modifier = Modifier.padding(start = 4.dp))
@@ -628,8 +758,11 @@ fun WorkoutResultScreen(
     val text = Color(0xFFE7F0FF)
     val secondaryText = Color(0xFF8194AD)
 
-    val level = (totalXp / 100) + 1
-    val currentLevelXp = totalXp % 100
+    // Use the same progression calculation as the home screen.
+    val levelInfo = getLevelInfo(totalXp)
+    val level = levelInfo.level
+    val currentLevelXp = levelInfo.currentXp
+    val requiredLevelXp = levelInfo.requiredXp
 
     Column(
         modifier = Modifier
@@ -741,7 +874,7 @@ fun WorkoutResultScreen(
             )
 
             Text(
-                text = "$currentLevelXp / 100 XP",
+                text = "$currentLevelXp / $requiredLevelXp XP",
                 color = secondaryText,
                 fontSize = 14.sp
             )
@@ -763,7 +896,7 @@ fun WorkoutResultScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(
-                            currentLevelXp / 100f
+                            (currentLevelXp.toFloat() / requiredLevelXp.toFloat()).coerceIn(0f, 1f)
                         )
                         .height(14.dp)
                         .background(

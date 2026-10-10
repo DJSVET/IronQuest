@@ -102,18 +102,55 @@ object PlayerData {
         return equipped
     }
 
-    /** 70% шанс дропа. Шансы редкости: обычный 55%, необычный 25%, редкий 12%, эпический 6%, легендарный 2%. */
-    suspend fun rollAndSaveDrop(context: Context): ItemDefinition? {
-        if (kotlin.random.Random.nextInt(100) >= 70) return null
+    /**
+     * Дроп зависит от реальной нагрузки. Нулевая тренировка никогда не даёт предмет.
+     * С ростом количества повторений увеличиваются и шанс выпадения, и шанс редкости.
+     */
+    suspend fun rollAndSaveDrop(context: Context, totalReps: Int): ItemDefinition? {
+        if (totalReps <= 0) return null
+
+        val dropChance = when {
+            totalReps >= 100 -> 90
+            totalReps >= 70 -> 85
+            totalReps >= 40 -> 75
+            totalReps >= 20 -> 65
+            totalReps >= 10 -> 50
+            else -> 35
+        }
+        if (kotlin.random.Random.nextInt(100) >= dropChance) return null
 
         val rarityRoll = kotlin.random.Random.nextInt(100)
         val rarity = when {
-            rarityRoll < 55 -> ItemRarity.COMMON
-            rarityRoll < 80 -> ItemRarity.UNCOMMON
-            rarityRoll < 92 -> ItemRarity.RARE
-            rarityRoll < 98 -> ItemRarity.EPIC
-            else -> ItemRarity.LEGENDARY
+            totalReps >= 100 -> when {
+                rarityRoll < 30 -> ItemRarity.COMMON
+                rarityRoll < 55 -> ItemRarity.UNCOMMON
+                rarityRoll < 80 -> ItemRarity.RARE
+                rarityRoll < 93 -> ItemRarity.EPIC
+                else -> ItemRarity.LEGENDARY
+            }
+            totalReps >= 50 -> when {
+                rarityRoll < 40 -> ItemRarity.COMMON
+                rarityRoll < 65 -> ItemRarity.UNCOMMON
+                rarityRoll < 85 -> ItemRarity.RARE
+                rarityRoll < 95 -> ItemRarity.EPIC
+                else -> ItemRarity.LEGENDARY
+            }
+            totalReps >= 20 -> when {
+                rarityRoll < 50 -> ItemRarity.COMMON
+                rarityRoll < 75 -> ItemRarity.UNCOMMON
+                rarityRoll < 91 -> ItemRarity.RARE
+                rarityRoll < 98 -> ItemRarity.EPIC
+                else -> ItemRarity.LEGENDARY
+            }
+            else -> when {
+                rarityRoll < 60 -> ItemRarity.COMMON
+                rarityRoll < 83 -> ItemRarity.UNCOMMON
+                rarityRoll < 95 -> ItemRarity.RARE
+                rarityRoll < 99 -> ItemRarity.EPIC
+                else -> ItemRarity.LEGENDARY
+            }
         }
+
         val candidates = ITEM_CATALOG.filter { it.rarity == rarity }
         val item = candidates.randomOrNull() ?: ITEM_CATALOG.first()
 
