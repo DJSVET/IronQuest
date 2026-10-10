@@ -20,6 +20,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
@@ -63,6 +66,67 @@ fun WorkoutScreen(
     val pullUps = remember { mutableStateListOf("") }
     val dips = remember { mutableStateListOf("") }
     val pushUps = remember { mutableStateListOf("") }
+    var showExitConfirmation by remember { mutableStateOf(false) }
+    var showFinishConfirmation by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = !isSaving) { showExitConfirmation = true }
+
+    fun finishWorkoutNow() {
+        val pullUpsTotal = pullUps.sumOf { it.toIntOrNull() ?: 0 }
+        val dipsTotal = dips.sumOf { it.toIntOrNull() ?: 0 }
+        val pushUpsTotal = pushUps.sumOf { it.toIntOrNull() ?: 0 }
+        val totalReps = pullUpsTotal + dipsTotal + pushUpsTotal
+        onFinish(
+            totalReps,
+            totalReps,
+            dipsTotal + pushUpsTotal,
+            pullUpsTotal,
+            dipsTotal + pushUpsTotal,
+            pullUpsTotal,
+            dipsTotal,
+            pushUpsTotal
+        )
+    }
+
+    if (showExitConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirmation = false },
+            title = { Text("Выйти из тренировки?") },
+            text = { Text("Введённые подходы не будут сохранены.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExitConfirmation = false
+                    onBack()
+                }) { Text("Выйти") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirmation = false }) { Text("Продолжить") }
+            },
+            containerColor = Color(0xFF111E30),
+            titleContentColor = text,
+            textContentColor = secondaryText
+        )
+    }
+
+    if (showFinishConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showFinishConfirmation = false },
+            title = { Text("Завершить тренировку?") },
+            text = { Text("Проверь количество повторений. После подтверждения результат будет сохранён.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showFinishConfirmation = false
+                    finishWorkoutNow()
+                }) { Text("Завершить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFinishConfirmation = false }) { Text("Отмена") }
+            },
+            containerColor = Color(0xFF111E30),
+            titleContentColor = text,
+            textContentColor = secondaryText
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -80,7 +144,7 @@ fun WorkoutScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
-                onClick = onBack,
+                onClick = { showExitConfirmation = true },
                 modifier = Modifier.height(40.dp),
                 shape = RoundedCornerShape(6.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -156,44 +220,7 @@ fun WorkoutScreen(
             label = "finish_scale"
         )
         Button(
-            onClick = {
-                val pullUpsTotal =
-                    pullUps.sumOf { it.toIntOrNull() ?: 0 }
-
-                val dipsTotal =
-                    dips.sumOf { it.toIntOrNull() ?: 0 }
-
-                val pushUpsTotal =
-                    pushUps.sumOf { it.toIntOrNull() ?: 0 }
-
-                val totalReps =
-                    pullUpsTotal + dipsTotal + pushUpsTotal
-
-                val xp = totalReps
-
-                val armsReps =
-                    pullUpsTotal + dipsTotal + pushUpsTotal
-
-                val shouldersReps =
-                    dipsTotal + pushUpsTotal
-
-                val backReps =
-                    pullUpsTotal
-
-                val chestReps =
-                    dipsTotal + pushUpsTotal
-
-                onFinish(
-                    xp,
-                    armsReps,
-                    shouldersReps,
-                    backReps,
-                    chestReps,
-                    pullUpsTotal,
-                    dipsTotal,
-                    pushUpsTotal
-                )
-            },
+            onClick = { showFinishConfirmation = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(60.dp)

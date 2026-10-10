@@ -211,6 +211,10 @@ fun WorkoutHistoryScreen(
                 modifier = Modifier.height(10.dp)
             )
 
+            HistoryAnalytics(history = history, panel = panel, accent = accent, text = text, secondaryText = secondaryText)
+
+            Spacer(Modifier.height(12.dp))
+
             ProgressGraph(
                 history = history,
                 panel = panel,
@@ -250,6 +254,51 @@ fun WorkoutHistoryScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HistoryAnalytics(
+    history: List<WorkoutRecord>,
+    panel: Color,
+    accent: Color,
+    text: Color,
+    secondaryText: Color
+) {
+    val total = history.sumOf { it.pullUps + it.dips + it.pushUps }
+    val average = if (history.isEmpty()) 0 else total / history.size
+    val best = history.maxOfOrNull { it.pullUps + it.dips + it.pushUps } ?: 0
+    val latest = history.firstOrNull()?.let { it.pullUps + it.dips + it.pushUps } ?: 0
+    val previous = history.getOrNull(1)?.let { it.pullUps + it.dips + it.pushUps }
+    val change = previous?.let { latest - it }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(6.dp)).padding(14.dp)
+    ) {
+        Text("ОБЩАЯ АНАЛИТИКА", color = accent, fontSize = 12.sp, fontWeight = FontWeight.Black)
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            AnalyticsValue("Тренировок", history.size.toString(), text, secondaryText)
+            AnalyticsValue("Повторений", total.toString(), text, secondaryText)
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            AnalyticsValue("В среднем", "$average", text, secondaryText)
+            AnalyticsValue("Рекорд", "$best", text, secondaryText)
+        }
+        if (change != null) {
+            Spacer(Modifier.height(10.dp))
+            val changeText = if (change > 0) "+$change повторений" else "$change повторений"
+            Text("Последняя тренировка: $changeText к предыдущей", color = if (change >= 0) accent else secondaryText, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun AnalyticsValue(label: String, value: String, text: Color, secondaryText: Color) {
+    Column {
+        Text(label, color = secondaryText, fontSize = 11.sp)
+        Text(value, color = text, fontSize = 20.sp, fontWeight = FontWeight.Black)
     }
 }
 
@@ -381,15 +430,14 @@ fun ProgressGraph(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-
             Text(
-                text = "0",
+                text = graphHistory.firstOrNull()?.let { SimpleDateFormat("dd.MM", Locale.getDefault()).format(Date(it.timestamp)) } ?: "—",
                 color = secondaryText,
                 fontSize = 11.sp
             )
-
+            Text("Максимум: $maxValue повторений", color = secondaryText, fontSize = 11.sp)
             Text(
-                text = "$maxValue",
+                text = graphHistory.lastOrNull()?.let { SimpleDateFormat("dd.MM", Locale.getDefault()).format(Date(it.timestamp)) } ?: "—",
                 color = secondaryText,
                 fontSize = 11.sp
             )

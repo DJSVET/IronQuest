@@ -2,6 +2,7 @@ package com.example.ironquest
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -20,8 +21,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -133,6 +137,17 @@ fun IronQuestApp() {
     var lastTotalXp by remember { mutableStateOf(0) }
     var isSavingWorkout by remember { mutableStateOf(false) }
     var lastDroppedItem by remember { mutableStateOf<ItemDefinition?>(null) }
+
+    // Системная кнопка/жест «Назад» возвращает к предыдущему экрану.
+    BackHandler(enabled = !showWorkout && (showResult || showHistory || showSettings || showInventory || showAchievements)) {
+        when {
+            showResult -> showResult = false
+            showHistory -> showHistory = false
+            showSettings -> showSettings = false
+            showInventory -> showInventory = false
+            showAchievements -> showAchievements = false
+        }
+    }
 
     if (showWorkout) {
 
@@ -278,18 +293,38 @@ fun IronQuestApp() {
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    Spacer(Modifier.height(5.dp))
-                    Text(
-                        text = "⚙ НАСТРОЙКИ",
-                        color = Color(0xFF8194AD),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { showSettings = true }
-                    )
+                    Spacer(Modifier.height(4.dp))
+                    IconButton(
+                        onClick = { showSettings = true },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Text("⚙", color = Color(0xFFB8FF5C), fontSize = 23.sp)
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            val lastWorkoutLabel = workoutHistory.firstOrNull()?.let { record ->
+                val workoutDate = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
+                    .format(java.util.Date(record.timestamp))
+                val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
+                    .format(java.util.Date())
+                val yesterday = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
+                    .format(java.util.Date(System.currentTimeMillis() - 24L * 60L * 60L * 1000L))
+                when (workoutDate) {
+                    today -> "Последняя тренировка: сегодня"
+                    yesterday -> "Последняя тренировка: вчера"
+                    else -> "Последняя тренировка: " + java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(record.timestamp))
+                }
+            } ?: "Последняя тренировка: пока нет"
+            Text(
+                text = lastWorkoutLabel,
+                color = Color(0xFF8194AD),
+                fontSize = 11.sp,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TopGameIcon(R.drawable.icon_history, "ИСТОРИЯ", Modifier.weight(1f)) { showHistory = true }

@@ -23,10 +23,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -56,6 +60,33 @@ fun SettingsScreen(onBack: () -> Unit) {
     var hour by remember { mutableStateOf(ReminderSettings.hour(context)) }
     var minute by remember { mutableStateOf(ReminderSettings.minute(context)) }
     var permissionMessage by remember { mutableStateOf("") }
+    var updateMessage by remember { mutableStateOf("Нажми, чтобы проверить последнюю версию на GitHub") }
+    var updateRelease by remember { mutableStateOf<ReleaseUpdate?>(null) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    fun checkForUpdates() {
+        if (checkingUpdate) return
+        checkingUpdate = true
+        updateMessage = "Проверяем GitHub Releases..."
+        scope.launch {
+            try {
+                val currentVersion = context.packageManager
+                    .getPackageInfo(context.packageName, 0).versionName ?: "v0.2"
+                val release = ReleaseUpdateChecker.check(currentVersion)
+                updateRelease = release
+                updateMessage = if (release == null) {
+                    "Установлена последняя доступная версия или релизы пока не опубликованы"
+                } else {
+                    "Доступно обновление: v${release.version}"
+                }
+            } catch (_: Exception) {
+                updateMessage = "Не удалось проверить обновления. Проверь интернет и попробуй ещё раз."
+            } finally {
+                checkingUpdate = false
+            }
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -79,6 +110,26 @@ fun SettingsScreen(onBack: () -> Unit) {
             .putInt(ReminderSettings.KEY_MINUTE, minute)
             .apply()
         ReminderScheduler.update(context)
+    }
+
+    if (updateRelease != null) {
+        AlertDialog(
+            onDismissRequest = { updateRelease = null },
+            title = { Text("Доступно обновление") },
+            text = { Text("Версия v${updateRelease!!.version} уже опубликована на GitHub. Открыть страницу релиза?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val release = updateRelease!!
+                    val url = release.apkUrl ?: release.url
+                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                    updateRelease = null
+                }) { Text(if (updateRelease!!.apkUrl != null) "Скачать APK" else "Открыть релиз") }
+            },
+            dismissButton = { TextButton(onClick = { updateRelease = null }) { Text("Позже") } },
+            containerColor = panel,
+            titleContentColor = text,
+            textContentColor = secondary
+        )
     }
 
     Column(
@@ -160,6 +211,22 @@ fun SettingsScreen(onBack: () -> Unit) {
         if (permissionMessage.isNotBlank()) {
             Spacer(Modifier.height(8.dp))
             Text(permissionMessage, color = secondary, fontSize = 11.sp)
+        }
+
+        Spacer(Modifier.height(22.dp))
+        Text("ОБНОВЛЕНИЯ", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
+        Spacer(Modifier.height(10.dp))
+        Column(modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(10.dp)).padding(14.dp)) {
+            Text(updateMessage, color = secondary, fontSize = 12.sp)
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = { checkForUpdates() },
+                enabled = !checkingUpdate,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = accent, disabledContainerColor = Color(0xFF64705A))
+            ) {
+                Text(if (checkingUpdate) "ПРОВЕРКА..." else "ПРОВЕРИТЬ ОБНОВЛЕНИЯ", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
         }
 
         Spacer(Modifier.height(22.dp))
