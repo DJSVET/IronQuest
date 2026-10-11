@@ -74,7 +74,7 @@ fun SettingsScreen(onBack: () -> Unit, onResetProgress: () -> Unit) {
         scope.launch {
             try {
                 val currentVersion = context.packageManager
-                    .getPackageInfo(context.packageName, 0).versionName ?: "v0.3"
+                    .getPackageInfo(context.packageName, 0).versionName ?: "v0.3.1"
                 val release = ReleaseUpdateChecker.check(currentVersion)
                 updateRelease = release
                 updateMessage = if (release == null) {
