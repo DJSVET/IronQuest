@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 
 @Composable
 fun WorkoutScreen(
@@ -287,28 +289,42 @@ fun ExerciseBlock(
             ) {
 
                 Text(
-                    text = "Подход ${index + 1}",
+                    text = "${index + 1}.",
                     color = secondaryText,
-                    fontSize = 14.sp
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
                 )
 
                 TextField(
                     value = value,
                     onValueChange = { newValue ->
-                        // Принимаем только цифры, чтобы нельзя было сохранить отрицательные или дробные повторы.
-                        if (newValue.all { it.isDigit() }) {
+                        // Только целые неотрицательные повторения.
+                        if (newValue.all { it.isDigit() } && newValue.length <= 4) {
                             sets[index] = newValue
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(0.45f),
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                     singleLine = true,
-                    placeholder = {
-                        Text("0")
-                    }
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    placeholder = { Text("Повторения") },
+                    label = { Text("Повторы") }
                 )
+                TextButton(
+                    onClick = { if (sets.size > 1) sets.removeAt(index) },
+                    enabled = sets.size > 1
+                ) { Text("−", color = if (sets.size > 1) Color(0xFFFF7777) else secondaryText, fontSize = 20.sp) }
             }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().background(Color(0xFF1A2A40), RoundedCornerShape(5.dp)).padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Всего повторений", color = secondaryText, fontSize = 12.sp)
+            Spacer(Modifier.weight(1f))
+            Text(sets.sumOf { it.toIntOrNull() ?: 0 }.toString(), color = Color(0xFFB8FF5C), fontSize = 17.sp, fontWeight = FontWeight.Black)
+        }
         Spacer(modifier = Modifier.height(8.dp))
 
         Button(

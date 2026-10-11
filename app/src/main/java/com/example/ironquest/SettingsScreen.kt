@@ -63,6 +63,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     var updateMessage by remember { mutableStateOf("Нажми, чтобы проверить последнюю версию на GitHub") }
     var updateRelease by remember { mutableStateOf<ReleaseUpdate?>(null) }
     var checkingUpdate by remember { mutableStateOf(false) }
+    var updateNotifications by remember { mutableStateOf(prefs.getBoolean("update_notifications_enabled", true)) }
     val scope = rememberCoroutineScope()
 
     fun checkForUpdates() {
@@ -217,6 +218,23 @@ fun SettingsScreen(onBack: () -> Unit) {
         Text("ОБНОВЛЕНИЯ", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
         Spacer(Modifier.height(10.dp))
         Column(modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(10.dp)).padding(14.dp)) {
+            SettingsSwitchRow(
+                title = "Уведомлять о новых версиях",
+                subtitle = "Проверять GitHub Releases в фоне примерно раз в сутки",
+                checked = updateNotifications,
+                onCheckedChange = { enabled ->
+                    updateNotifications = enabled
+                    prefs.edit().putBoolean("update_notifications_enabled", enabled).apply()
+                    if (enabled) {
+                        requestNotificationPermissionIfNeeded()
+                        UpdateCheckScheduler.schedule(context.applicationContext)
+                    }
+                },
+                accent = accent,
+                text = text,
+                secondary = secondary
+            )
+            Divider(color = Color(0xFF29384D), modifier = Modifier.padding(vertical = 8.dp))
             Text(updateMessage, color = secondary, fontSize = 12.sp)
             Spacer(Modifier.height(10.dp))
             Button(
@@ -236,7 +254,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Версия приложения", color = text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
-                Text("v0.2", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                Text(context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "—", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Black)
             }
             Divider(color = Color(0xFF29384D), modifier = Modifier.padding(vertical = 10.dp))
             Row(

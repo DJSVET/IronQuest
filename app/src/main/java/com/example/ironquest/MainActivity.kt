@@ -75,6 +75,11 @@ fun IronQuestApp() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    // Проверка новых релизов при запуске и далее периодически в фоне.
+    LaunchedEffect(Unit) {
+        UpdateCheckScheduler.schedule(context.applicationContext)
+    }
+
     val playerStats by PlayerData
         .getStats(context)
         .collectAsState(
