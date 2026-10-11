@@ -2,9 +2,11 @@ package com.example.ironquest
 
 import android.content.Context
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -84,6 +89,10 @@ object WorkoutHistoryData {
             }
         }
 
+    suspend fun clearHistory(context: Context) {
+        context.workoutHistoryDataStore.edit { preferences -> preferences.clear() }
+    }
+
     suspend fun addWorkout(
         context: Context,
         xp: Int,
@@ -120,6 +129,13 @@ fun WorkoutHistoryScreen(
     val history by WorkoutHistoryData
         .getHistory(context)
         .collectAsState(initial = emptyList())
+    var analyticsPeriod by remember { mutableStateOf("30 дней") }
+    val periodStart = when (analyticsPeriod) {
+        "7 дней" -> System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
+        "30 дней" -> System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+        else -> 0L
+    }
+    val analyticsHistory = history.filter { it.timestamp >= periodStart }
 
     Column(
         modifier = Modifier
@@ -211,12 +227,31 @@ fun WorkoutHistoryScreen(
                 modifier = Modifier.height(10.dp)
             )
 
-            HistoryAnalytics(history = history, panel = panel, accent = accent, text = text, secondaryText = secondaryText)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("7 дней", "30 дней", "Всё время").forEach { period ->
+                    val selected = analyticsPeriod == period
+                    Text(
+                        text = period,
+                        color = if (selected) Color(0xFF080F1B) else secondaryText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(if (selected) accent else panel, RoundedCornerShape(8.dp))
+                            .clickable { analyticsPeriod = period }
+                            .padding(horizontal = 12.dp, vertical = 9.dp)
+                    )
+                }
+            }
+
+            HistoryAnalytics(history = analyticsHistory, panel = panel, accent = accent, text = text, secondaryText = secondaryText)
 
             Spacer(Modifier.height(12.dp))
 
             ProgressGraph(
-                history = history,
+                history = analyticsHistory,
                 panel = panel,
                 accent = accent,
                 secondaryText = secondaryText
@@ -265,40 +300,44 @@ private fun HistoryAnalytics(
     text: Color,
     secondaryText: Color
 ) {
-    val total = history.sumOf { it.pullUps + it.dips + it.pushUps }
-    val average = if (history.isEmpty()) 0 else total / history.size
+    val totalReps = history.sumOf { it.pullUps + it.dips + it.pushUps }
+    val totalXp = history.sumOf { it.xp }
+    val average = if (history.isEmpty()) 0 else totalReps / history.size
     val best = history.maxOfOrNull { it.pullUps + it.dips + it.pushUps } ?: 0
-    val latest = history.firstOrNull()?.let { it.pullUps + it.dips + it.pushUps } ?: 0
-    val previous = history.getOrNull(1)?.let { it.pullUps + it.dips + it.pushUps }
-    val change = previous?.let { latest - it }
 
     Column(
-        modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(6.dp)).padding(14.dp)
+        modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(10.dp)).padding(14.dp)
     ) {
-        Text("ОБЩАЯ АНАЛИТИКА", color = accent, fontSize = 12.sp, fontWeight = FontWeight.Black)
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            AnalyticsValue("Тренировок", history.size.toString(), text, secondaryText)
-            AnalyticsValue("Повторений", total.toString(), text, secondaryText)
-        }
+        Text("СВОДКА ПРОГРЕССА", color = accent, fontSize = 12.sp, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            AnalyticsValue("В среднем", "$average", text, secondaryText)
-            AnalyticsValue("Рекорд", "$best", text, secondaryText)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AnalyticsValue("Тренировки", history.size.toString(), text, secondaryText, Modifier.weight(1f))
+            AnalyticsValue("Повторения", totalReps.toString(), text, secondaryText, Modifier.weight(1f))
         }
-        if (change != null) {
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AnalyticsValue("В среднем", "$average", text, secondaryText, Modifier.weight(1f))
+            AnalyticsValue("Рекорд", "$best", text, secondaryText, Modifier.weight(1f))
+            AnalyticsValue("Опыт", "+$totalXp XP", text, secondaryText, Modifier.weight(1f))
+        }
+        if (history.isEmpty()) {
             Spacer(Modifier.height(10.dp))
-            val changeText = if (change > 0) "+$change повторений" else "$change повторений"
-            Text("Последняя тренировка: $changeText к предыдущей", color = if (change >= 0) accent else secondaryText, fontSize = 12.sp)
+            Text("За этот период тренировок нет. Выбери другой период или проведи тренировку.", color = secondaryText, fontSize = 12.sp)
         }
     }
 }
 
 @Composable
-private fun AnalyticsValue(label: String, value: String, text: Color, secondaryText: Color) {
-    Column {
+private fun AnalyticsValue(
+    label: String,
+    value: String,
+    text: Color,
+    secondaryText: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
         Text(label, color = secondaryText, fontSize = 11.sp)
-        Text(value, color = text, fontSize = 20.sp, fontWeight = FontWeight.Black)
+        Text(value, color = text, fontSize = 19.sp, fontWeight = FontWeight.Black)
     }
 }
 
@@ -309,138 +348,58 @@ fun ProgressGraph(
     accent: Color,
     secondaryText: Color
 ) {
-    val graphHistory = history
-        .take(10)
-        .reversed()
-
-    val values = graphHistory.map {
-        it.pullUps + it.dips + it.pushUps
-    }
-
-    val maxValue = (values.maxOrNull() ?: 1)
-        .coerceAtLeast(1)
+    val graphHistory = history.take(7).reversed()
+    val values = graphHistory.map { it.pullUps + it.dips + it.pushUps }
+    val maxValue = (values.maxOrNull() ?: 0).coerceAtLeast(1)
+    val dateFormat = remember { SimpleDateFormat("dd.MM", Locale.getDefault()) }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                panel,
-                RoundedCornerShape(6.dp)
-            )
-            .padding(15.dp)
+        modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(10.dp)).padding(15.dp)
     ) {
+        Text("ПОВТОРЕНИЯ ПО ТРЕНИРОВКАМ", color = secondaryText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Text("Последние ${values.size} тренировок · максимум $maxValue повторений", color = secondaryText, fontSize = 11.sp)
+        Spacer(Modifier.height(14.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-
-            Text(
-                text = "Повторения",
-                color = secondaryText,
-                fontSize = 13.sp
-            )
-
-            Text(
-                text = "Последние ${values.size}",
-                color = secondaryText,
-                fontSize = 13.sp
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(10.dp)
-        )
-
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-        ) {
-
-            val graphWidth = size.width
-            val graphHeight = size.height
-
-            if (values.isNotEmpty()) {
-
-                val stepX =
-                    if (values.size == 1) {
-                        0f
-                    } else {
-                        graphWidth / (values.size - 1)
-                    }
-
-                val points = values.mapIndexed { index, value ->
-
-                    val x = index * stepX
-
-                    val normalized =
-                        value.toFloat() / maxValue.toFloat()
-
-                    val y =
-                        graphHeight - (normalized * graphHeight)
-
-                    androidx.compose.ui.geometry.Offset(
-                        x,
-                        y
-                    )
-                }
-
-                val linePath = Path()
-
-                points.forEachIndexed { index, point ->
-
-                    if (index == 0) {
-                        linePath.moveTo(
-                            point.x,
-                            point.y
-                        )
-                    } else {
-                        linePath.lineTo(
-                            point.x,
-                            point.y
+        if (graphHistory.isEmpty()) {
+            Text("График появится после первой тренировки.", color = secondaryText, fontSize = 13.sp, modifier = Modifier.padding(vertical = 28.dp))
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(150.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                graphHistory.forEach { workout ->
+                    val value = workout.pullUps + workout.dips + workout.pushUps
+                    Column(
+                        modifier = Modifier.weight(1f).fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom
+                    ) {
+                        Text(value.toString(), color = secondaryText, fontSize = 10.sp, maxLines = 1)
+                        Spacer(Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight((value.toFloat() / maxValue).coerceAtLeast(0.06f))
+                                .background(accent, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                         )
                     }
                 }
-
-                drawPath(
-                    path = linePath,
-                    color = accent,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 6f
-                    )
-                )
-
-                points.forEach { point ->
-
-                    drawCircle(
-                        color = accent,
-                        radius = 8f,
-                        center = point
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                graphHistory.forEach { workout ->
+                    Text(
+                        dateFormat.format(Date(workout.timestamp)),
+                        color = secondaryText,
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
             }
-        }
-
-        Spacer(
-            modifier = Modifier.height(8.dp)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = graphHistory.firstOrNull()?.let { SimpleDateFormat("dd.MM", Locale.getDefault()).format(Date(it.timestamp)) } ?: "—",
-                color = secondaryText,
-                fontSize = 11.sp
-            )
-            Text("Максимум: $maxValue повторений", color = secondaryText, fontSize = 11.sp)
-            Text(
-                text = graphHistory.lastOrNull()?.let { SimpleDateFormat("dd.MM", Locale.getDefault()).format(Date(it.timestamp)) } ?: "—",
-                color = secondaryText,
-                fontSize = 11.sp
-            )
         }
     }
 }

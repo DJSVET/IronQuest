@@ -88,7 +88,8 @@ fun IronQuestApp() {
                 armsReps = 0,
                 shouldersReps = 0,
                 backReps = 0,
-                chestReps = 0
+                chestReps = 0,
+                coins = 0
             )
         )
 
@@ -115,7 +116,8 @@ fun IronQuestApp() {
     val achievements = getAchievements(
         history = workoutHistory,
         totalXp = playerStats.xp,
-        streak = currentStreak
+        streak = currentStreak,
+        inventory = inventory
     )
 
     val unlockedAchievements = achievements.count {
@@ -138,19 +140,25 @@ fun IronQuestApp() {
     var showAchievements by remember { mutableStateOf(false) }
     var showInventory by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showShop by remember { mutableStateOf(false) }
+    var lastWorkoutCoins by remember { mutableStateOf(0) }
+    var lastShopReward by remember { mutableStateOf<ItemDefinition?>(null) }
     var lastXp by remember { mutableStateOf(0) }
     var lastTotalXp by remember { mutableStateOf(0) }
     var isSavingWorkout by remember { mutableStateOf(false) }
     var lastDroppedItem by remember { mutableStateOf<ItemDefinition?>(null) }
 
-    // Системная кнопка/жест «Назад» возвращает к предыдущему экрану.
-    BackHandler(enabled = !showWorkout && (showResult || showHistory || showSettings || showInventory || showAchievements)) {
+    // Системная кнопка/жест «Назад»: закрывает текущий экран, а не всё приложение.
+    // На главном экране стандартное поведение Android (выход) сохраняется.
+    BackHandler(enabled = !showWorkout) {
         when {
             showResult -> showResult = false
             showHistory -> showHistory = false
             showSettings -> showSettings = false
             showInventory -> showInventory = false
             showAchievements -> showAchievements = false
+            showShop -> { showShop = false; lastShopReward = null }
+            else -> (context as? android.app.Activity)?.finish()
         }
     }
 
@@ -167,7 +175,7 @@ fun IronQuestApp() {
                     scope.launch {
                         try {
                             // Сначала полностью сохраняем тренировку и награды, и только потом открываем результат.
-                            PlayerData.addWorkout(
+                            lastWorkoutCoins = PlayerData.addWorkout(
                                 context = context,
                                 xp = xp,
                                 armsReps = armsReps,
@@ -209,11 +217,31 @@ fun IronQuestApp() {
             xp = lastXp,
             totalXp = lastTotalXp,
             droppedItem = lastDroppedItem,
+            coinsEarned = lastWorkoutCoins,
             onContinue = {
                 showResult = false
             }
         )
 
+        return
+    }
+
+    if (showShop) {
+        ShopScreen(
+            coins = playerStats.coins,
+            onOpenCase = { shopCase ->
+                scope.launch {
+                    when (val result = PlayerData.openCase(context, shopCase)) {
+                        is CaseOpenResult.Success -> lastShopReward = result.item
+                        CaseOpenResult.NotEnoughCoins -> lastShopReward = null
+                        CaseOpenResult.EmptyCatalog -> lastShopReward = null
+                    }
+                }
+            },
+            rewardItem = lastShopReward,
+            onDismissReward = { lastShopReward = null },
+            onBack = { showShop = false; lastShopReward = null }
+        )
         return
     }
 
@@ -230,7 +258,16 @@ fun IronQuestApp() {
     }
 
     if (showSettings) {
-        SettingsScreen(onBack = { showSettings = false })
+        SettingsScreen(
+            onBack = { showSettings = false },
+            onResetProgress = {
+                scope.launch {
+                    PlayerData.resetProgress(context)
+                    WorkoutHistoryData.clearHistory(context)
+                    showSettings = false
+                }
+            }
+        )
         return
     }
 
@@ -238,7 +275,10 @@ fun IronQuestApp() {
         InventoryScreen(
             items = inventory,
             equippedItemIds = equippedItems,
+            coins = playerStats.coins,
             onEquip = { item -> scope.launch { PlayerData.equipItem(context, item) } },
+            onUnequip = { item -> scope.launch { PlayerData.unequipItem(context, item) } },
+            onSell = { item -> scope.launch { PlayerData.sellItem(context, item) } },
             onBack = { showInventory = false }
         )
         return
@@ -248,6 +288,7 @@ fun IronQuestApp() {
 
         AchievementsScreen(
             achievements = achievements,
+            inventory = inventory,
             onBack = {
                 showAchievements = false
             }
@@ -335,6 +376,15 @@ fun IronQuestApp() {
                 TopGameIcon(R.drawable.icon_history, "ИСТОРИЯ", Modifier.weight(1f)) { showHistory = true }
                 TopGameIcon(R.drawable.icon_achievements, "НАГРАДЫ $unlockedAchievements/${achievements.size}", Modifier.weight(1f)) { showAchievements = true }
                 TopGameIcon(R.drawable.icon_inventory, "ИНВЕНТАРЬ ${inventory.sumOf { it.count }}", Modifier.weight(1f)) { showInventory = true }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { showShop = true },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF223148)),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Text("▣  МАГАЗИН КЕЙСОВ", color = Color(0xFF5CE1FF), fontWeight = FontWeight.Black)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -446,11 +496,19 @@ fun IronQuestApp() {
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Всего заработано: ${playerStats.xp} XP",
-                    color = Color(0xFF7E8AA3),
-                    fontSize = 11.sp
-                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        text = "Всего заработано: ${playerStats.xp} XP",
+                        color = Color(0xFF7E8AA3),
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        text = "🪙 ${playerStats.coins}",
+                        color = Color(0xFFFFC84A),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -789,6 +847,7 @@ fun WorkoutResultScreen(
     xp: Int,
     totalXp: Int,
     droppedItem: ItemDefinition?,
+    coinsEarned: Int,
     onContinue: () -> Unit
 ) {
 
@@ -850,6 +909,20 @@ fun WorkoutResultScreen(
             color = secondaryText,
             fontSize = 16.sp
         )
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Box(
+            modifier = Modifier
+                .background(Color(0xFF302A1B), RoundedCornerShape(8.dp))
+                .padding(horizontal = 18.dp, vertical = 10.dp)
+        ) {
+            Text(
+                text = "+$coinsEarned 🪙 МОНЕТ ЗА ТРЕНИРОВКУ",
+                color = Color(0xFFFFC84A),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Black
+            )
+        }
 
         if (droppedItem != null) {
             Spacer(modifier = Modifier.height(18.dp))

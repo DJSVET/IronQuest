@@ -88,7 +88,8 @@ data class Achievement(
 fun getAchievements(
     history: List<WorkoutRecord>,
     totalXp: Int,
-    streak: Int
+    streak: Int,
+    inventory: List<InventoryEntry> = emptyList()
 ): List<Achievement> {
     val totalReps = history.sumOf { it.pullUps + it.dips + it.pushUps }
 
@@ -148,6 +149,14 @@ fun getAchievements(
             unlocked = totalReps >= 500,
             id = "reps_500",
             rewardXp = 200
+        ),
+        Achievement(
+            title = "Страж леса",
+            description = "Собрать полный сет: броня лесного стража, сапоги странника, железный шлем и стальной наруч",
+            unlocked = setOf("forest_armor", "traveler_boots", "iron_helmet", "steel_bracer")
+                .all { requiredId -> inventory.any { it.item.id == requiredId && it.count > 0 } },
+            id = "set_forest_guardian",
+            rewardXp = 300
         )
     )
 }

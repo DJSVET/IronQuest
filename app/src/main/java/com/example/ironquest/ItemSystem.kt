@@ -8,7 +8,8 @@ enum class ItemRarity(val label: String, val color: Color) {
     UNCOMMON("НЕОБЫЧНЫЙ", Color(0xFF65D98A)),
     RARE("РЕДКИЙ", Color(0xFF5CE1FF)),
     EPIC("ЭПИЧЕСКИЙ", Color(0xFFC49BFF)),
-    LEGENDARY("ЛЕГЕНДАРНЫЙ", Color(0xFFFFC84A))
+    LEGENDARY("ЛЕГЕНДАРНЫЙ", Color(0xFFFFC84A)),
+    MYTHIC("МИФИЧЕСКИЙ", Color(0xFFFF6B8A))
 }
 
 data class ItemDefinition(
@@ -21,7 +22,18 @@ data class ItemDefinition(
     val slot: String? = null,
     /** Прозрачный PNG-слой, который отображается поверх героя. */
     val overlayRes: Int? = null
-)
+) {
+    /** Цена продажи одной копии предмета. */
+    val sellPrice: Int
+        get() = when (rarity) {
+            ItemRarity.COMMON -> 5
+            ItemRarity.UNCOMMON -> 12
+            ItemRarity.RARE -> 25
+            ItemRarity.EPIC -> 60
+            ItemRarity.LEGENDARY -> 150
+            ItemRarity.MYTHIC -> 350
+        }
+}
 
 data class InventoryEntry(
     val item: ItemDefinition,
@@ -50,3 +62,17 @@ val ITEM_CATALOG = listOf(
     ItemDefinition("legendary_crown", "Корона чемпиона", R.drawable.item_legendary_crown, ItemRarity.LEGENDARY,
         "Легендарная награда для тех, кто не сдаётся.", slot = "head", overlayRes = R.drawable.gear_helmet)
 )
+
+
+/** Виды кейсов и их стоимость в магазине. */
+enum class ShopCase(val title: String, val price: Int, val description: String) {
+    BASIC("КЕЙС НОВИЧКА", 30, "Чаще обычные и необычные предметы"),
+    RARE("КЕЙС ИСКАТЕЛЯ", 75, "Повышенный шанс редких и эпических вещей"),
+    EPIC("ЭПИЧЕСКИЙ КЕЙС", 150, "Высокий шанс эпической и легендарной экипировки")
+}
+
+sealed class CaseOpenResult {
+    data class Success(val item: ItemDefinition) : CaseOpenResult()
+    object NotEnoughCoins : CaseOpenResult()
+    object EmptyCatalog : CaseOpenResult()
+}

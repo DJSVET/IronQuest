@@ -46,7 +46,7 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onResetProgress: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { ReminderSettings.preferences(context) }
     val background = Color(0xFF080F1B)
@@ -55,6 +55,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val text = Color(0xFFE7F0FF)
     val secondary = Color(0xFF8194AD)
 
+    var showResetDialog by remember { mutableStateOf(false) }
     var workoutReminder by remember { mutableStateOf(ReminderSettings.workoutEnabled(context)) }
     var streakReminder by remember { mutableStateOf(ReminderSettings.streakEnabled(context)) }
     var hour by remember { mutableStateOf(ReminderSettings.hour(context)) }
@@ -127,6 +128,26 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }) { Text(if (updateRelease!!.apkUrl != null) "Скачать APK" else "Открыть релиз") }
             },
             dismissButton = { TextButton(onClick = { updateRelease = null }) { Text("Позже") } },
+            containerColor = panel,
+            titleContentColor = text,
+            textContentColor = secondary
+        )
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Сбросить весь прогресс?") },
+            text = { Text("Будут удалены уровень, опыт, история тренировок, достижения, монеты и все предметы. Это действие нельзя отменить.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetDialog = false
+                    onResetProgress()
+                }) { Text("СБРОСИТЬ", color = Color(0xFFFF5964)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) { Text("Отмена") }
+            },
             containerColor = panel,
             titleContentColor = text,
             textContentColor = secondary
@@ -268,6 +289,16 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Spacer(Modifier.weight(1f))
                 Text("Открыть ↗", color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
+        }
+        Spacer(Modifier.height(22.dp))
+        Text("ОПАСНАЯ ЗОНА", color = Color(0xFFFF5964), fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
+        Spacer(Modifier.height(10.dp))
+        Button(
+            onClick = { showResetDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8F2634))
+        ) {
+            Text("СБРОСИТЬ ВСЕ ДАННЫЕ", color = Color.White, fontWeight = FontWeight.Black)
         }
         Spacer(Modifier.height(20.dp))
         Text(

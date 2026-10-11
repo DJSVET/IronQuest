@@ -18,12 +18,14 @@ data class PlayerStats(
     val armsReps: Int,
     val shouldersReps: Int,
     val backReps: Int,
-    val chestReps: Int
+    val chestReps: Int,
+    val coins: Int
 )
 
 object PlayerData {
 
     private val XP_KEY = intPreferencesKey("total_xp")
+    private val COINS_KEY = intPreferencesKey("player_coins")
     private val ARMS_KEY = intPreferencesKey("arms_reps")
     private val SHOULDERS_KEY = intPreferencesKey("shoulders_reps")
     private val BACK_KEY = intPreferencesKey("back_reps")
@@ -40,7 +42,8 @@ object PlayerData {
                 armsReps = preferences[ARMS_KEY] ?: 0,
                 shouldersReps = preferences[SHOULDERS_KEY] ?: 0,
                 backReps = preferences[BACK_KEY] ?: 0,
-                chestReps = preferences[CHEST_KEY] ?: 0
+                chestReps = preferences[CHEST_KEY] ?: 0,
+                coins = preferences[COINS_KEY] ?: 0
             )
         }
     }
@@ -102,6 +105,19 @@ object PlayerData {
         return equipped
     }
 
+    /** Снимает предмет с выбранного слота, оставляя его в инвентаре. */
+    suspend fun unequipItem(context: Context, item: ItemDefinition): Boolean {
+        val slot = item.slot ?: return false
+        var unequipped = false
+        context.dataStore.edit { preferences ->
+            if (preferences[stringPreferencesKey("equipped_$slot")] == item.id) {
+                preferences.remove(stringPreferencesKey("equipped_$slot"))
+                unequipped = true
+            }
+        }
+        return unequipped
+    }
+
     /**
      * Дроп зависит от реальной нагрузки. Нулевая тренировка никогда не даёт предмет.
      * С ростом количества повторений увеличиваются и шанс выпадения, и шанс редкости.
@@ -161,6 +177,29 @@ object PlayerData {
         return item
     }
 
+    /** Продаёт одну копию предмета. Последнюю надетую копию продать нельзя. */
+    suspend fun sellItem(context: Context, item: ItemDefinition): Int {
+        var earnedCoins = 0
+        context.dataStore.edit { preferences ->
+            val itemKey = intPreferencesKey("item_${item.id}")
+            val count = preferences[itemKey] ?: 0
+            val equipped = EQUIPMENT_SLOTS.any { slot ->
+                preferences[stringPreferencesKey("equipped_$slot")] == item.id
+            }
+            if (count > 0 && !(equipped && count == 1)) {
+                preferences[itemKey] = count - 1
+                earnedCoins = item.sellPrice
+                preferences[COINS_KEY] = (preferences[COINS_KEY] ?: 0) + earnedCoins
+            }
+        }
+        return earnedCoins
+    }
+
+    /** Полный сброс игрового прогресса и инвентаря. */
+    suspend fun resetProgress(context: Context) {
+        context.dataStore.edit { preferences -> preferences.clear() }
+    }
+
     suspend fun addWorkout(
         context: Context,
         xp: Int,
@@ -168,12 +207,18 @@ object PlayerData {
         shouldersReps: Int,
         backReps: Int,
         chestReps: Int
-    ) {
-
+    ): Int {
+        var earnedCoins = 0
         context.dataStore.edit { preferences ->
 
             preferences[XP_KEY] =
                 (preferences[XP_KEY] ?: 0) + xp
+
+            // Небольшая награда за тренировку: предметы остаются главным источником монет.
+            val totalReps = armsReps + shouldersReps + backReps + chestReps
+            val workoutCoins = (1 + totalReps / 30).coerceIn(1, 5)
+            earnedCoins = workoutCoins
+            preferences[COINS_KEY] = (preferences[COINS_KEY] ?: 0) + workoutCoins
 
             preferences[ARMS_KEY] =
                 (preferences[ARMS_KEY] ?: 0) + armsReps
@@ -187,5 +232,33 @@ object PlayerData {
             preferences[CHEST_KEY] =
                 (preferences[CHEST_KEY] ?: 0) + chestReps
         }
+        return earnedCoins
+    }
+
+    /** Покупает кейс и сохраняет выпавший предмет атомарно вместе со списанием монет. */
+    suspend fun openCase(context: Context, case: ShopCase): CaseOpenResult {
+        var result: CaseOpenResult = CaseOpenResult.NotEnoughCoins
+        context.dataStore.edit { preferences ->
+            val coins = preferences[COINS_KEY] ?: 0
+            if (coins >= case.price) {
+                val roll = kotlin.random.Random.nextInt(100)
+                val rarity = when (case) {
+                    ShopCase.BASIC -> when { roll < 55 -> ItemRarity.COMMON; roll < 82 -> ItemRarity.UNCOMMON; roll < 95 -> ItemRarity.RARE; roll < 99 -> ItemRarity.EPIC; else -> ItemRarity.LEGENDARY }
+                    ShopCase.RARE -> when { roll < 20 -> ItemRarity.COMMON; roll < 50 -> ItemRarity.UNCOMMON; roll < 78 -> ItemRarity.RARE; roll < 95 -> ItemRarity.EPIC; else -> ItemRarity.LEGENDARY }
+                    ShopCase.EPIC -> when { roll < 10 -> ItemRarity.UNCOMMON; roll < 35 -> ItemRarity.RARE; roll < 75 -> ItemRarity.EPIC; roll < 97 -> ItemRarity.LEGENDARY; else -> ItemRarity.MYTHIC }
+                }
+                val candidates = ITEM_CATALOG.filter { it.rarity == rarity }
+                val item = (candidates.ifEmpty { ITEM_CATALOG.filter { it.rarity == ItemRarity.COMMON } }).randomOrNull()
+                if (item != null) {
+                    preferences[COINS_KEY] = coins - case.price
+                    val itemKey = intPreferencesKey("item_${item.id}")
+                    preferences[itemKey] = (preferences[itemKey] ?: 0) + 1
+                    result = CaseOpenResult.Success(item)
+                } else {
+                    result = CaseOpenResult.EmptyCatalog
+                }
+            }
+        }
+        return result
     }
 }

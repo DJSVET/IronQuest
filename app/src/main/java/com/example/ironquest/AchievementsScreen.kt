@@ -28,7 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun AchievementsScreen(achievements: List<Achievement>, onBack: () -> Unit) {
+fun AchievementsScreen(
+    achievements: List<Achievement>,
+    inventory: List<InventoryEntry> = emptyList(),
+    onBack: () -> Unit
+) {
     val background = Color(0xFF080F1B)
     val panel = Color(0xFF111E30)
     val text = Color(0xFFE7F0FF)
@@ -47,6 +51,31 @@ fun AchievementsScreen(achievements: List<Achievement>, onBack: () -> Unit) {
             }
         }
         Spacer(Modifier.height(18.dp))
+
+        val forestSet = listOf(
+            "forest_armor" to "Броня лесного стража",
+            "traveler_boots" to "Сапоги странника",
+            "iron_helmet" to "Железный шлем",
+            "steel_bracer" to "Стальной наруч"
+        )
+        val collectedForestPieces = forestSet.count { (id, _) -> inventory.any { it.item.id == id && it.count > 0 } }
+        Column(
+            Modifier.fillMaxWidth().padding(bottom = 14.dp)
+                .border(1.dp, Color(0xFFC49BFF).copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                .background(panel, RoundedCornerShape(12.dp)).padding(14.dp)
+        ) {
+            Text("КОЛЛЕКЦИЯ СЕТОВ", color = Color(0xFFC49BFF), fontSize = 13.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.height(6.dp))
+            Text("Страж леса · $collectedForestPieces/${forestSet.size}", color = text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(5.dp))
+            forestSet.forEach { (id, name) ->
+                val collected = inventory.any { it.item.id == id && it.count > 0 }
+                Text("${if (collected) "✓" else "○"} $name", color = if (collected) green else muted, fontSize = 12.sp)
+            }
+            Spacer(Modifier.height(5.dp))
+            Text("Собери все 4 предмета, чтобы открыть достижение и получить 300 XP.", color = muted, fontSize = 11.sp)
+        }
+
         achievements.forEachIndexed { index, achievement ->
             Row(Modifier.fillMaxWidth().padding(bottom = 10.dp)
                 .border(1.dp, if (achievement.unlocked) green.copy(alpha = 0.55f) else Color(0xFF293950), RoundedCornerShape(12.dp))

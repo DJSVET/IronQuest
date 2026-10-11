@@ -38,7 +38,10 @@ private val IqGreen = Color(0xFFB8FF5C)
 fun InventoryScreen(
     items: List<InventoryEntry>,
     equippedItemIds: Map<String, String>,
+    coins: Int,
     onEquip: (ItemDefinition) -> Unit,
+    onUnequip: (ItemDefinition) -> Unit,
+    onSell: (ItemDefinition) -> Unit,
     onBack: () -> Unit
 ) {
     Column(
@@ -50,6 +53,7 @@ fun InventoryScreen(
             Column(Modifier.weight(1f).padding(start = 10.dp)) {
                 Text("ИНВЕНТАРЬ", color = IqText, fontSize = 22.sp, fontWeight = FontWeight.Black)
                 Text("ПРЕДМЕТОВ: ${items.sumOf { it.count }}", color = IqMuted, fontSize = 10.sp, letterSpacing = 1.sp)
+                Text("🪙 $coins МОНЕТ", color = Color(0xFFFFC84A), fontSize = 12.sp, fontWeight = FontWeight.Black)
             }
             Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF223148)),
                 shape = RoundedCornerShape(8.dp)) { Text("НАЗАД", color = IqText, fontWeight = FontWeight.Bold) }
@@ -88,12 +92,28 @@ fun InventoryScreen(
                     Text(item.description, color = IqMuted, fontSize = 12.sp)
                     if (item.slot != null) {
                         Spacer(Modifier.height(10.dp))
-                        Button(onClick = { onEquip(item) }, modifier = Modifier.fillMaxWidth().height(42.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = if (isEquipped) Color(0xFF25452F) else IqGreen),
-                            shape = RoundedCornerShape(8.dp)) {
-                            Text(if (isEquipped) "НАДЕТО" else "НАДЕТЬ НА ПЕРСОНАЖА",
-                                color = if (isEquipped) IqGreen else Color(0xFF0B1420), fontWeight = FontWeight.Black, fontSize = 12.sp)
+                        Button(
+                            onClick = { if (isEquipped) onUnequip(item) else onEquip(item) },
+                            modifier = Modifier.fillMaxWidth().height(42.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = if (isEquipped) Color(0xFF7B3540) else IqGreen),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                if (isEquipped) "СНЯТЬ С ПЕРСОНАЖА" else "НАДЕТЬ НА ПЕРСОНАЖА",
+                                color = if (isEquipped) Color.White else Color(0xFF0B1420),
+                                fontWeight = FontWeight.Black,
+                                fontSize = 12.sp
+                            )
                         }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { onSell(item) },
+                        modifier = Modifier.fillMaxWidth().height(40.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B3540)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("ПРОДАТЬ ЗА ${item.sellPrice} 🪙", color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
                     }
                 }
             }
