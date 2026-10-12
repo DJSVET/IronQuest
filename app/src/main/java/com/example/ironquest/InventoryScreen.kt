@@ -36,6 +36,7 @@ private val IqGreen = Color(0xFFB8FF5C)
 
 @Composable
 fun InventoryScreen(
+    language: AppLanguage = AppLanguage.RU,
     items: List<InventoryEntry>,
     equippedItemIds: Map<String, String>,
     coins: Int,
@@ -44,6 +45,7 @@ fun InventoryScreen(
     onSell: (ItemDefinition) -> Unit,
     onBack: () -> Unit
 ) {
+    val s = strings(language)
     Column(
         modifier = Modifier.fillMaxSize().background(IqBackground)
             .verticalScroll(rememberScrollState()).padding(18.dp)
@@ -51,12 +53,12 @@ fun InventoryScreen(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.icon_inventory), null, Modifier.size(36.dp))
             Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                Text("ИНВЕНТАРЬ", color = IqText, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                Text("ПРЕДМЕТОВ: ${items.sumOf { it.count }}", color = IqMuted, fontSize = 10.sp, letterSpacing = 1.sp)
-                Text("🪙 $coins МОНЕТ", color = Color(0xFFFFC84A), fontSize = 12.sp, fontWeight = FontWeight.Black)
+                Text(s.inventory, color = IqText, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                Text(s.itemsCount(items.sumOf { it.count }), color = IqMuted, fontSize = 10.sp, letterSpacing = 1.sp)
+                Text(s.coinsCount(coins), color = Color(0xFFFFC84A), fontSize = 12.sp, fontWeight = FontWeight.Black)
             }
             Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF223148)),
-                shape = RoundedCornerShape(8.dp)) { Text("НАЗАД", color = IqText, fontWeight = FontWeight.Bold) }
+                shape = RoundedCornerShape(8.dp)) { Text(s.backButton, color = IqText, fontWeight = FontWeight.Bold) }
         }
         Spacer(Modifier.height(18.dp))
 
@@ -65,9 +67,9 @@ fun InventoryScreen(
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(painterResource(R.drawable.icon_inventory), null, Modifier.size(58.dp))
                 Spacer(Modifier.height(12.dp))
-                Text("Инвентарь пуст", color = IqText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(s.emptyInventory, color = IqText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(6.dp))
-                Text("Завершай тренировки — после них могут выпасть предметы.", color = IqMuted, fontSize = 13.sp)
+                Text(s.emptyInventoryHint, color = IqMuted, fontSize = 13.sp)
             }
         } else {
             items.forEach { entry ->
@@ -82,14 +84,14 @@ fun InventoryScreen(
                             Image(painterResource(item.iconRes), null, Modifier.size(54.dp))
                         }
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                            Text(item.name, color = IqText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                            Text(item.rarity.label, color = item.rarity.color, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                            Text(item.name(language), color = IqText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text(item.rarity.label(language), color = item.rarity.color, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
                             Spacer(Modifier.height(4.dp))
-                            Text("Количество: ${entry.count}", color = IqGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(s.quantity(entry.count), color = IqGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(item.description, color = IqMuted, fontSize = 12.sp)
+                    Text(item.description(language), color = IqMuted, fontSize = 12.sp)
                     if (item.slot != null) {
                         Spacer(Modifier.height(10.dp))
                         Button(
@@ -99,7 +101,7 @@ fun InventoryScreen(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                if (isEquipped) "СНЯТЬ С ПЕРСОНАЖА" else "НАДЕТЬ НА ПЕРСОНАЖА",
+                                if (isEquipped) s.unequip else s.equip,
                                 color = if (isEquipped) Color.White else Color(0xFF0B1420),
                                 fontWeight = FontWeight.Black,
                                 fontSize = 12.sp
@@ -113,7 +115,7 @@ fun InventoryScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B3540)),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("ПРОДАТЬ ЗА ${item.sellPrice} 🪙", color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                        Text(s.sellFor(item.sellPrice), color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
                     }
                 }
             }

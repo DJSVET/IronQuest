@@ -84,6 +84,7 @@ object ReminderScheduler {
 class WorkoutReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         createNotificationChannel(context)
+        val s = strings(AppPreferences.getLanguage(context))
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -106,12 +107,12 @@ class WorkoutReminderReceiver : BroadcastReceiver() {
                     val message: String
                     when {
                         streakReminder && streak > 0 -> {
-                            title = "Не теряй серию!"
-                            message = "Твоя серия — $streak дн. Сделай тренировку сегодня, чтобы продолжить прогресс."
+                            title = s.streakReminderTitle
+                            message = s.streakReminderMessage(streak)
                         }
                         workoutReminder -> {
-                            title = "Время тренировки"
-                            message = "Пора сделать ещё один шаг к своей цели в IronQuest."
+                            title = s.workoutReminderTitle
+                            message = s.workoutReminderMessage
                         }
                         else -> return@launch
                     }
@@ -149,12 +150,13 @@ class WorkoutReminderReceiver : BroadcastReceiver() {
 
     private fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val s = strings(AppPreferences.getLanguage(context))
             val channel = NotificationChannel(
                 "ironquest_workouts",
-                "Напоминания IronQuest",
+                s.reminderChannelName,
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Напоминания о тренировках и тренировочной серии"
+                description = s.reminderChannelDescription
             }
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)

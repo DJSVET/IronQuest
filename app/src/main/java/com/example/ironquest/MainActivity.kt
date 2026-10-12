@@ -74,6 +74,8 @@ fun IronQuestApp() {
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var appLanguage by remember { mutableStateOf(AppPreferences.getLanguage(context)) }
+    val s = strings(appLanguage)
 
     // Проверка новых релизов при запуске и далее периодически в фоне.
     LaunchedEffect(Unit) {
@@ -165,6 +167,7 @@ fun IronQuestApp() {
     if (showWorkout) {
 
         WorkoutScreen(
+            language = appLanguage,
             isSaving = isSavingWorkout,
             onFinish = { xp, armsReps, shouldersReps, backReps, chestReps, pullUps, dips, pushUps ->
                 if (!isSavingWorkout) {
@@ -214,6 +217,7 @@ fun IronQuestApp() {
     if (showResult) {
 
         WorkoutResultScreen(
+            language = appLanguage,
             xp = lastXp,
             totalXp = lastTotalXp,
             droppedItem = lastDroppedItem,
@@ -228,6 +232,7 @@ fun IronQuestApp() {
 
     if (showShop) {
         ShopScreen(
+            language = appLanguage,
             coins = playerStats.coins,
             onOpenCase = { shopCase ->
                 scope.launch {
@@ -248,6 +253,7 @@ fun IronQuestApp() {
     if (showHistory) {
 
         WorkoutHistoryScreen(
+            language = appLanguage,
             context = context,
             onBack = {
                 showHistory = false
@@ -259,7 +265,12 @@ fun IronQuestApp() {
 
     if (showSettings) {
         SettingsScreen(
+            language = appLanguage,
             onBack = { showSettings = false },
+            onLanguageChange = { selected ->
+                AppPreferences.setLanguage(context, selected)
+                appLanguage = selected
+            },
             onResetProgress = {
                 scope.launch {
                     PlayerData.resetProgress(context)
@@ -273,6 +284,7 @@ fun IronQuestApp() {
 
     if (showInventory) {
         InventoryScreen(
+            language = appLanguage,
             items = inventory,
             equippedItemIds = equippedItems,
             coins = playerStats.coins,
@@ -287,6 +299,7 @@ fun IronQuestApp() {
     if (showAchievements) {
 
         AchievementsScreen(
+            language = appLanguage,
             achievements = achievements,
             inventory = inventory,
             onBack = {
@@ -319,7 +332,7 @@ fun IronQuestApp() {
                         fontWeight = FontWeight.Black
                     )
                     Text(
-                        text = "ТВОЙ ПУТЬ СИЛЫ",
+                        text = s.tagline,
                         color = Color(0xFF7E8AA3),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -333,7 +346,7 @@ fun IronQuestApp() {
                             .padding(horizontal = 12.dp, vertical = 9.dp)
                     ) {
                         Text(
-                            text = "СЕРИЯ $currentStreak ДН.",
+                            text = s.streak(currentStreak),
                             color = Color(0xFFB8FF5C),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
@@ -358,11 +371,11 @@ fun IronQuestApp() {
                 val yesterday = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
                     .format(java.util.Date(System.currentTimeMillis() - 24L * 60L * 60L * 1000L))
                 when (workoutDate) {
-                    today -> "Последняя тренировка: сегодня"
-                    yesterday -> "Последняя тренировка: вчера"
-                    else -> "Последняя тренировка: " + java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(record.timestamp))
+                    today -> s.lastWorkoutToday
+                    yesterday -> s.lastWorkoutYesterday
+                    else -> s.lastWorkoutDate(java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(record.timestamp)))
                 }
-            } ?: "Последняя тренировка: пока нет"
+            } ?: s.lastWorkoutNone
             Text(
                 text = lastWorkoutLabel,
                 color = Color(0xFF8194AD),
@@ -373,9 +386,9 @@ fun IronQuestApp() {
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TopGameIcon(R.drawable.icon_history, "ИСТОРИЯ", Modifier.weight(1f)) { showHistory = true }
-                TopGameIcon(R.drawable.icon_achievements, "НАГРАДЫ $unlockedAchievements/${achievements.size}", Modifier.weight(1f)) { showAchievements = true }
-                TopGameIcon(R.drawable.icon_inventory, "ИНВЕНТАРЬ ${inventory.sumOf { it.count }}", Modifier.weight(1f)) { showInventory = true }
+                TopGameIcon(R.drawable.icon_history, s.history, Modifier.weight(1f)) { showHistory = true }
+                TopGameIcon(R.drawable.icon_achievements, s.rewardsCount(unlockedAchievements, achievements.size), Modifier.weight(1f)) { showAchievements = true }
+                TopGameIcon(R.drawable.icon_inventory, s.inventoryWithCount(inventory.sumOf { it.count }), Modifier.weight(1f)) { showInventory = true }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Button(
@@ -384,7 +397,7 @@ fun IronQuestApp() {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF223148)),
                 shape = RoundedCornerShape(6.dp)
             ) {
-                Text("▣  МАГАЗИН КЕЙСОВ", color = Color(0xFF5CE1FF), fontWeight = FontWeight.Black)
+                Text(s.caseShop, color = Color(0xFF5CE1FF), fontWeight = FontWeight.Black)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -407,7 +420,7 @@ fun IronQuestApp() {
                 )
             ) {
                 Text(
-                    text = "▶  НАЧАТЬ ТРЕНИРОВКУ",
+                    text = s.startWorkout,
                     color = Color(0xFF080F1B),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Black,
@@ -417,7 +430,7 @@ fun IronQuestApp() {
 
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "КАЖДАЯ ТРЕНИРОВКА — ШАГ К НОВОМУ УРОВНЮ",
+                text = s.workoutMotivation,
                 color = Color(0xFF566178),
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
@@ -437,7 +450,7 @@ fun IronQuestApp() {
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "ТВОЙ ГЕРОЙ",
+                            text = s.yourHero,
                             color = Color(0xFF7E8AA3),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -445,13 +458,13 @@ fun IronQuestApp() {
                         )
                         Spacer(modifier = Modifier.height(5.dp))
                         Text(
-                            text = "Боец",
+                            text = s.fighter,
                             color = Color(0xFFE7F0FF),
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Black
                         )
                         Text(
-                            text = "УРОВЕНЬ $level",
+                            text = s.level(level),
                             color = Color(0xFFB8FF5C),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
@@ -467,7 +480,7 @@ fun IronQuestApp() {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "ОПЫТ",
+                        text = s.experience,
                         color = Color(0xFF7E8AA3),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
@@ -498,7 +511,7 @@ fun IronQuestApp() {
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(
-                        text = "Всего заработано: ${playerStats.xp} XP",
+                        text = s.totalEarned(playerStats.xp),
                         color = Color(0xFF7E8AA3),
                         fontSize = 11.sp
                     )
@@ -513,7 +526,7 @@ fun IronQuestApp() {
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            WorkoutComparisonCard(history = workoutHistory)
+            WorkoutComparisonCard(history = workoutHistory, language = appLanguage)
 
             Spacer(modifier = Modifier.height(18.dp))
 
@@ -522,7 +535,7 @@ fun IronQuestApp() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "ХАРАКТЕРИСТИКИ",
+                    text = s.attributes,
                     color = Color(0xFFE7F0FF),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Black,
@@ -530,7 +543,7 @@ fun IronQuestApp() {
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    text = "ПОКАЗАТЕЛИ",
+                    text = s.stats,
                     color = Color(0xFF7E8AA3),
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold
@@ -539,32 +552,32 @@ fun IronQuestApp() {
             Spacer(modifier = Modifier.height(10.dp))
 
             PixelStatCard(
-                title = "РУКИ",
-                subtitle = "Сила и выносливость",
+                title = s.arms,
+                subtitle = s.armsSubtitle,
                 value = playerStats.armsReps,
                 iconRes = R.drawable.icon_arms,
                 accent = Color(0xFFB8FF5C)
             )
             Spacer(modifier = Modifier.height(8.dp))
             PixelStatCard(
-                title = "ПЛЕЧИ",
-                subtitle = "Стабильность и мощь",
+                title = s.shoulders,
+                subtitle = s.shouldersSubtitle,
                 value = playerStats.shouldersReps,
                 iconRes = R.drawable.icon_shoulders,
                 accent = Color(0xFF5CE1FF)
             )
             Spacer(modifier = Modifier.height(8.dp))
             PixelStatCard(
-                title = "СПИНА",
-                subtitle = "Подтягивания",
+                title = s.back,
+                subtitle = s.backSubtitle,
                 value = playerStats.backReps,
                 iconRes = R.drawable.icon_back,
                 accent = Color(0xFFC49BFF)
             )
             Spacer(modifier = Modifier.height(8.dp))
             PixelStatCard(
-                title = "ГРУДЬ",
-                subtitle = "Жимовые упражнения",
+                title = s.chest,
+                subtitle = s.chestSubtitle,
                 value = playerStats.chestReps,
                 iconRes = R.drawable.icon_chest,
                 accent = Color(0xFFFF8A65)
@@ -579,7 +592,8 @@ fun IronQuestApp() {
 
 
 @Composable
-private fun WorkoutComparisonCard(history: List<WorkoutRecord>) {
+private fun WorkoutComparisonCard(history: List<WorkoutRecord>, language: AppLanguage) {
+    val s = strings(language)
     val panel = Color(0xFF111E30)
     val text = Color(0xFFE7F0FF)
     val secondary = Color(0xFF8194AD)
@@ -592,7 +606,7 @@ private fun WorkoutComparisonCard(history: List<WorkoutRecord>) {
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
         Text(
-            text = "СРАВНЕНИЕ ТРЕНИРОВОК",
+            text = s.workoutComparison,
             color = secondary,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
@@ -602,7 +616,7 @@ private fun WorkoutComparisonCard(history: List<WorkoutRecord>) {
 
         if (history.isEmpty()) {
             Text(
-                text = "Заверши первую тренировку, чтобы начать отслеживать прогресс",
+                text = s.comparisonEmpty,
                 color = text,
                 fontSize = 12.sp
             )
@@ -619,7 +633,7 @@ private fun WorkoutComparisonCard(history: List<WorkoutRecord>) {
                 else -> secondary
             }
             val changeText = when {
-                previousTotal == null -> "НОВАЯ СТАТИСТИКА"
+                previousTotal == null -> s.newStats
                 difference > 0 -> "↑ +$difference"
                 difference < 0 -> "↓ $difference"
                 else -> "→ 0"
@@ -631,26 +645,26 @@ private fun WorkoutComparisonCard(history: List<WorkoutRecord>) {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "ПОСЛЕДНЯЯ ТРЕНИРОВКА",
+                        text = s.lastWorkout,
                         color = secondary,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "$latestTotal повторений",
+                        text = s.reps(latestTotal),
                         color = text,
                         fontSize = 21.sp,
                         fontWeight = FontWeight.Black
                     )
                     if (previousTotal != null) {
                         Text(
-                            text = "Предыдущая: $previousTotal",
+                            text = s.previous(previousTotal),
                             color = secondary,
                             fontSize = 11.sp
                         )
                     } else {
                         Text(
-                            text = "Следующая тренировка покажет разницу",
+                            text = s.nextWorkoutDifference,
                             color = secondary,
                             fontSize = 11.sp
                         )
@@ -664,7 +678,7 @@ private fun WorkoutComparisonCard(history: List<WorkoutRecord>) {
                         fontWeight = FontWeight.Black
                     )
                     Text(
-                        text = if (previousTotal == null) "" else "к прошлой",
+                        text = if (previousTotal == null) "" else s.comparedToPrevious,
                         color = secondary,
                         fontSize = 10.sp
                     )
@@ -844,12 +858,14 @@ fun ProgressCard(
 
 @Composable
 fun WorkoutResultScreen(
+    language: AppLanguage = AppLanguage.RU,
     xp: Int,
     totalXp: Int,
     droppedItem: ItemDefinition?,
     coinsEarned: Int,
     onContinue: () -> Unit
 ) {
+    val s = strings(language)
 
     val background = Color(0xFF080F1B)
     val panel = Color(0xFF111E30)
@@ -876,14 +892,14 @@ fun WorkoutResultScreen(
         )
 
         Text(
-            text = "ТРЕНИРОВКА",
+            text = s.workout,
             color = accent,
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold
         )
 
         Text(
-            text = "ЗАВЕРШЕНА",
+            text = s.completed,
             color = text,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
@@ -905,7 +921,7 @@ fun WorkoutResultScreen(
         )
 
         Text(
-            text = "Отличная работа!",
+            text = s.greatWork,
             color = secondaryText,
             fontSize = 16.sp
         )
@@ -917,7 +933,7 @@ fun WorkoutResultScreen(
                 .padding(horizontal = 18.dp, vertical = 10.dp)
         ) {
             Text(
-                text = "+$coinsEarned 🪙 МОНЕТ ЗА ТРЕНИРОВКУ",
+                text = s.coinsForWorkout(coinsEarned),
                 color = Color(0xFFFFC84A),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Black
@@ -934,18 +950,18 @@ fun WorkoutResultScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "ПРЕДМЕТ НАЙДЕН!",
+                    text = s.itemFound,
                     color = droppedItem.rarity.color,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Black
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(painter = painterResource(droppedItem.iconRes), contentDescription = droppedItem.name, modifier = Modifier.size(42.dp))
-                    Text(droppedItem.name, color = Color(0xFFE7F0FF), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Image(painter = painterResource(droppedItem.iconRes), contentDescription = droppedItem.name(language), modifier = Modifier.size(42.dp))
+                    Text(droppedItem.name(language), color = Color(0xFFE7F0FF), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
                 Text(
-                    text = droppedItem.rarity.label,
+                    text = droppedItem.rarity.label(language),
                     color = droppedItem.rarity.color,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
@@ -954,7 +970,7 @@ fun WorkoutResultScreen(
         } else {
             Spacer(modifier = Modifier.height(18.dp))
             Text(
-                text = "В этот раз предмет не выпал. Повезёт в следующий раз!",
+                text = s.noItemDropped,
                 color = secondaryText,
                 fontSize = 12.sp
             )
@@ -976,7 +992,7 @@ fun WorkoutResultScreen(
         ) {
 
             Text(
-                text = "УРОВЕНЬ $level",
+                text = s.level(level),
                 color = text,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
@@ -1036,7 +1052,7 @@ fun WorkoutResultScreen(
         ) {
 
             Text(
-                text = "← ВЕРНУТЬСЯ В МЕНЮ",
+                text = s.backToMenu,
                 color = Color.Black,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold

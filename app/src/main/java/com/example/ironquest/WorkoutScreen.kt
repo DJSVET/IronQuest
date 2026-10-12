@@ -45,6 +45,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 
 @Composable
 fun WorkoutScreen(
+    language: AppLanguage = AppLanguage.RU,
     isSaving: Boolean = false,
     onFinish: (
         xp: Int,
@@ -58,6 +59,7 @@ fun WorkoutScreen(
     ) -> Unit,
     onBack: () -> Unit
 ) {
+    val s = strings(language)
 
     val background = Color(0xFF080F1B)
     val panel = Color(0xFF111E30)
@@ -93,16 +95,16 @@ fun WorkoutScreen(
     if (showExitConfirmation) {
         AlertDialog(
             onDismissRequest = { showExitConfirmation = false },
-            title = { Text("Выйти из тренировки?") },
-            text = { Text("Введённые подходы не будут сохранены.") },
+            title = { Text(s.workoutExitTitle) },
+            text = { Text(s.workoutExitText) },
             confirmButton = {
                 TextButton(onClick = {
                     showExitConfirmation = false
                     onBack()
-                }) { Text("Выйти") }
+                }) { Text(s.exit) }
             },
             dismissButton = {
-                TextButton(onClick = { showExitConfirmation = false }) { Text("Продолжить") }
+                TextButton(onClick = { showExitConfirmation = false }) { Text(s.continueAction) }
             },
             containerColor = Color(0xFF111E30),
             titleContentColor = text,
@@ -113,16 +115,16 @@ fun WorkoutScreen(
     if (showFinishConfirmation) {
         AlertDialog(
             onDismissRequest = { showFinishConfirmation = false },
-            title = { Text("Завершить тренировку?") },
-            text = { Text("Проверь количество повторений. После подтверждения результат будет сохранён.") },
+            title = { Text(s.finishWorkoutTitle) },
+            text = { Text(s.finishWorkoutText) },
             confirmButton = {
                 TextButton(onClick = {
                     showFinishConfirmation = false
                     finishWorkoutNow()
-                }) { Text("Завершить") }
+                }) { Text(s.finish) }
             },
             dismissButton = {
-                TextButton(onClick = { showFinishConfirmation = false }) { Text("Отмена") }
+                TextButton(onClick = { showFinishConfirmation = false }) { Text(s.cancel) }
             },
             containerColor = Color(0xFF111E30),
             titleContentColor = text,
@@ -165,7 +167,7 @@ fun WorkoutScreen(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(painter = painterResource(R.drawable.icon_workout), contentDescription = null, modifier = Modifier.size(32.dp))
-                Text(text = "ТРЕНИРОВКА", color = text, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                Text(text = s.workout, color = text, fontSize = 20.sp, fontWeight = FontWeight.Black)
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -177,7 +179,9 @@ fun WorkoutScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         ExerciseBlock(
-            title = "ПОДТЯГИВАНИЯ",
+            title = s.pullUps,
+            iconRes = R.drawable.icon_pullups,
+            language = language,
             sets = pullUps,
             onAddSet = {
                 pullUps.add("")
@@ -190,7 +194,9 @@ fun WorkoutScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         ExerciseBlock(
-            title = "БРУСЬЯ",
+            title = s.dips,
+            iconRes = R.drawable.icon_dips,
+            language = language,
             sets = dips,
             onAddSet = {
                 dips.add("")
@@ -203,7 +209,9 @@ fun WorkoutScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         ExerciseBlock(
-            title = "ОТЖИМАНИЯ",
+            title = s.pushUps,
+            iconRes = R.drawable.icon_pushups,
+            language = language,
             sets = pushUps,
             onAddSet = {
                 pushUps.add("")
@@ -235,7 +243,7 @@ fun WorkoutScreen(
             )
         ) {
             Text(
-                text = if (isSaving) "СОХРАНЕНИЕ..." else "ЗАВЕРШИТЬ ТРЕНИРОВКУ",
+                text = if (isSaving) s.saving else s.finishWorkout,
                 color = Color.Black,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
@@ -249,12 +257,15 @@ fun WorkoutScreen(
 @Composable
 fun ExerciseBlock(
     title: String,
+    iconRes: Int,
+    language: AppLanguage = AppLanguage.RU,
     sets: MutableList<String>,
     onAddSet: () -> Unit,
     panel: Color,
     text: Color,
     secondaryText: Color
 ) {
+    val s = strings(language)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -265,13 +276,8 @@ fun ExerciseBlock(
             .padding(15.dp)
     ) {
 
-        val exerciseIcon = when {
-            title.contains("ПОДТЯГИВАНИЯ") -> R.drawable.icon_pullups
-            title.contains("БРУСЬЯ") -> R.drawable.icon_dips
-            else -> R.drawable.icon_pushups
-        }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(painter = painterResource(exerciseIcon), contentDescription = null, modifier = Modifier.size(34.dp))
+            Image(painter = painterResource(iconRes), contentDescription = null, modifier = Modifier.size(34.dp))
             Text(text = title, color = text, fontSize = 16.sp, fontWeight = FontWeight.Black,
                 modifier = Modifier.padding(start = 10.dp))
         }
@@ -306,8 +312,8 @@ fun ExerciseBlock(
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    placeholder = { Text("Повторения") },
-                    label = { Text("Повторы") }
+                    placeholder = { Text(s.repetitionsPlaceholder) },
+                    label = { Text(s.repsLabel) }
                 )
                 TextButton(
                     onClick = { if (sets.size > 1) sets.removeAt(index) },
@@ -321,7 +327,7 @@ fun ExerciseBlock(
             modifier = Modifier.fillMaxWidth().background(Color(0xFF1A2A40), RoundedCornerShape(5.dp)).padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Всего повторений", color = secondaryText, fontSize = 12.sp)
+            Text(s.totalReps, color = secondaryText, fontSize = 12.sp)
             Spacer(Modifier.weight(1f))
             Text(sets.sumOf { it.toIntOrNull() ?: 0 }.toString(), color = Color(0xFFB8FF5C), fontSize = 17.sp, fontWeight = FontWeight.Black)
         }
@@ -336,7 +342,7 @@ fun ExerciseBlock(
             )
         ) {
             Text(
-                text = "+ ДОБАВИТЬ ПОДХОД",
+                text = s.addSet,
                 color = text,
                 fontSize = 13.sp
             )

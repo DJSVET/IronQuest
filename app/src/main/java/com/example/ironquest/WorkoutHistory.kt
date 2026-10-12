@@ -117,9 +117,11 @@ object WorkoutHistoryData {
 
 @Composable
 fun WorkoutHistoryScreen(
+    language: AppLanguage = AppLanguage.RU,
     context: Context,
     onBack: () -> Unit
 ) {
+    val s = strings(language)
     val background = Color(0xFF080F1B)
     val panel = Color(0xFF111E30)
     val accent = Color(0xFFB8FF5C)
@@ -129,13 +131,19 @@ fun WorkoutHistoryScreen(
     val history by WorkoutHistoryData
         .getHistory(context)
         .collectAsState(initial = emptyList())
-    var analyticsPeriod by remember { mutableStateOf("30 дней") }
+    var analyticsPeriod by remember { mutableStateOf(HistoryPeriod.THIRTY_DAYS) }
+    var exerciseFilter by remember { mutableStateOf(HistoryExerciseFilter.ALL) }
     val periodStart = when (analyticsPeriod) {
-        "7 дней" -> System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
-        "30 дней" -> System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+        HistoryPeriod.SEVEN_DAYS -> System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
+        HistoryPeriod.THIRTY_DAYS -> System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
         else -> 0L
     }
     val analyticsHistory = history.filter { it.timestamp >= periodStart }
+    val visibleHistory = analyticsHistory
+        .filter { exerciseFilter == HistoryExerciseFilter.ALL || exerciseFilter.reps(it) > 0 }
+        .let { records ->
+            if (exerciseFilter == HistoryExerciseFilter.ALL) records else records.sortedByDescending { exerciseFilter.reps(it) }
+        }
 
     Column(
         modifier = Modifier
@@ -171,7 +179,7 @@ fun WorkoutHistoryScreen(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(painterResource(R.drawable.icon_history), null, Modifier.height(30.dp))
-                Text("ИСТОРИЯ", color = text, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                Text(s.history, color = text, fontSize = 22.sp, fontWeight = FontWeight.Black)
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -197,7 +205,7 @@ fun WorkoutHistoryScreen(
             ) {
 
                 Text(
-                    text = "Тренировок пока нет",
+                    text = s.historyEmptyTitle,
                     color = text,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
@@ -208,7 +216,7 @@ fun WorkoutHistoryScreen(
                 )
 
                 Text(
-                    text = "Проведи первую тренировку,\nи она появится здесь.",
+                    text = s.historyEmptyText,
                     color = secondaryText,
                     fontSize = 14.sp
                 )
@@ -217,7 +225,7 @@ fun WorkoutHistoryScreen(
         } else {
 
             Text(
-                text = "ПРОГРЕСС",
+                text = s.progress,
                 color = text,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
@@ -231,10 +239,10 @@ fun WorkoutHistoryScreen(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf("7 дней", "30 дней", "Всё время").forEach { period ->
+                HistoryPeriod.values().forEach { period ->
                     val selected = analyticsPeriod == period
                     Text(
-                        text = period,
+                        text = period.label(s),
                         color = if (selected) Color(0xFF080F1B) else secondaryText,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -246,12 +254,40 @@ fun WorkoutHistoryScreen(
                 }
             }
 
-            HistoryAnalytics(history = analyticsHistory, panel = panel, accent = accent, text = text, secondaryText = secondaryText)
+            Text(
+                text = s.exerciseFilter,
+                color = secondaryText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                HistoryExerciseFilter.values().forEach { filter ->
+                    val selected = exerciseFilter == filter
+                    Text(
+                        text = filter.label(s),
+                        color = if (selected) Color(0xFF080F1B) else secondaryText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(if (selected) accent else panel, RoundedCornerShape(8.dp))
+                            .clickable { exerciseFilter = filter }
+                            .padding(horizontal = 12.dp, vertical = 9.dp)
+                    )
+                }
+            }
+
+            HistoryAnalytics(history = visibleHistory, filter = exerciseFilter, strings = s, panel = panel, accent = accent, text = text, secondaryText = secondaryText)
 
             Spacer(Modifier.height(12.dp))
 
             ProgressGraph(
-                history = analyticsHistory,
+                history = visibleHistory,
+                filter = exerciseFilter,
+                appStrings = s,
                 panel = panel,
                 accent = accent,
                 secondaryText = secondaryText
@@ -262,7 +298,7 @@ fun WorkoutHistoryScreen(
             )
 
             Text(
-                text = "ТРЕНИРОВКИ",
+                text = s.workouts,
                 color = text,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
@@ -272,9 +308,10 @@ fun WorkoutHistoryScreen(
                 modifier = Modifier.height(10.dp)
             )
 
-            history.forEachIndexed { index, workout ->
+            visibleHistory.forEachIndexed { index, workout ->
 
                 WorkoutHistoryCard(
+                    language = language,
                     workout = workout,
                     panel = panel,
                     accent = accent,
@@ -282,7 +319,7 @@ fun WorkoutHistoryScreen(
                     secondaryText = secondaryText
                 )
 
-                if (index < history.lastIndex) {
+                if (index < visibleHistory.lastIndex) {
                     Spacer(
                         modifier = Modifier.height(10.dp)
                     )
@@ -292,37 +329,72 @@ fun WorkoutHistoryScreen(
     }
 }
 
+enum class HistoryPeriod {
+    SEVEN_DAYS,
+    THIRTY_DAYS,
+    ALL_TIME;
+
+    fun label(strings: AppStrings): String = when (this) {
+        SEVEN_DAYS -> strings.sevenDays
+        THIRTY_DAYS -> strings.thirtyDays
+        ALL_TIME -> strings.allTime
+    }
+}
+
+enum class HistoryExerciseFilter {
+    ALL,
+    PULL_UPS,
+    DIPS,
+    PUSH_UPS;
+
+    fun label(strings: AppStrings): String = when (this) {
+        ALL -> strings.allExercises
+        PULL_UPS -> strings.pullUps
+        DIPS -> strings.dips
+        PUSH_UPS -> strings.pushUps
+    }
+
+    fun reps(record: WorkoutRecord): Int = when (this) {
+        ALL -> record.pullUps + record.dips + record.pushUps
+        PULL_UPS -> record.pullUps
+        DIPS -> record.dips
+        PUSH_UPS -> record.pushUps
+    }
+}
+
 @Composable
 private fun HistoryAnalytics(
     history: List<WorkoutRecord>,
+    filter: HistoryExerciseFilter,
+    strings: AppStrings,
     panel: Color,
     accent: Color,
     text: Color,
     secondaryText: Color
 ) {
-    val totalReps = history.sumOf { it.pullUps + it.dips + it.pushUps }
+    val totalReps = history.sumOf { filter.reps(it) }
     val totalXp = history.sumOf { it.xp }
     val average = if (history.isEmpty()) 0 else totalReps / history.size
-    val best = history.maxOfOrNull { it.pullUps + it.dips + it.pushUps } ?: 0
+    val best = history.maxOfOrNull { filter.reps(it) } ?: 0
 
     Column(
         modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(10.dp)).padding(14.dp)
     ) {
-        Text("СВОДКА ПРОГРЕССА", color = accent, fontSize = 12.sp, fontWeight = FontWeight.Black)
+        Text(strings.progressSummary, color = accent, fontSize = 12.sp, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AnalyticsValue("Тренировки", history.size.toString(), text, secondaryText, Modifier.weight(1f))
-            AnalyticsValue("Повторения", totalReps.toString(), text, secondaryText, Modifier.weight(1f))
+            AnalyticsValue(strings.workoutCount, history.size.toString(), text, secondaryText, Modifier.weight(1f))
+            AnalyticsValue(strings.repetitions, totalReps.toString(), text, secondaryText, Modifier.weight(1f))
         }
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            AnalyticsValue("В среднем", "$average", text, secondaryText, Modifier.weight(1f))
-            AnalyticsValue("Рекорд", "$best", text, secondaryText, Modifier.weight(1f))
-            AnalyticsValue("Опыт", "+$totalXp XP", text, secondaryText, Modifier.weight(1f))
+            AnalyticsValue(strings.average, "$average", text, secondaryText, Modifier.weight(1f))
+            AnalyticsValue(strings.record, "$best", text, secondaryText, Modifier.weight(1f))
+            AnalyticsValue(strings.experience, "+$totalXp XP", text, secondaryText, Modifier.weight(1f))
         }
         if (history.isEmpty()) {
             Spacer(Modifier.height(10.dp))
-            Text("За этот период тренировок нет. Выбери другой период или проведи тренировку.", color = secondaryText, fontSize = 12.sp)
+            Text(strings.noWorkoutsPeriod, color = secondaryText, fontSize = 12.sp)
         }
     }
 }
@@ -344,25 +416,27 @@ private fun AnalyticsValue(
 @Composable
 fun ProgressGraph(
     history: List<WorkoutRecord>,
+    filter: HistoryExerciseFilter = HistoryExerciseFilter.ALL,
+    appStrings: AppStrings = strings(AppLanguage.RU),
     panel: Color,
     accent: Color,
     secondaryText: Color
 ) {
     val graphHistory = history.take(7).reversed()
-    val values = graphHistory.map { it.pullUps + it.dips + it.pushUps }
+    val values = graphHistory.map { filter.reps(it) }
     val maxValue = (values.maxOrNull() ?: 0).coerceAtLeast(1)
     val dateFormat = remember { SimpleDateFormat("dd.MM", Locale.getDefault()) }
 
     Column(
         modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(10.dp)).padding(15.dp)
     ) {
-        Text("ПОВТОРЕНИЯ ПО ТРЕНИРОВКАМ", color = secondaryText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(appStrings.repsByWorkout, color = secondaryText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
-        Text("Последние ${values.size} тренировок · максимум $maxValue повторений", color = secondaryText, fontSize = 11.sp)
+        Text(appStrings.lastWorkoutsMax(values.size, maxValue), color = secondaryText, fontSize = 11.sp)
         Spacer(Modifier.height(14.dp))
 
         if (graphHistory.isEmpty()) {
-            Text("График появится после первой тренировки.", color = secondaryText, fontSize = 13.sp, modifier = Modifier.padding(vertical = 28.dp))
+            Text(appStrings.graphEmpty, color = secondaryText, fontSize = 13.sp, modifier = Modifier.padding(vertical = 28.dp))
         } else {
             Row(
                 modifier = Modifier.fillMaxWidth().height(150.dp),
@@ -370,7 +444,7 @@ fun ProgressGraph(
                 verticalAlignment = Alignment.Bottom
             ) {
                 graphHistory.forEach { workout ->
-                    val value = workout.pullUps + workout.dips + workout.pushUps
+                    val value = filter.reps(workout)
                     Column(
                         modifier = Modifier.weight(1f).fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -406,12 +480,14 @@ fun ProgressGraph(
 
 @Composable
 fun WorkoutHistoryCard(
+    language: AppLanguage = AppLanguage.RU,
     workout: WorkoutRecord,
     panel: Color,
     accent: Color,
     text: Color,
     secondaryText: Color
 ) {
+    val s = strings(language)
     val date = SimpleDateFormat(
         "dd.MM.yyyy • HH:mm",
         Locale.getDefault()
@@ -460,7 +536,7 @@ fun WorkoutHistoryCard(
         )
 
         Text(
-            text = "Всего повторений: $totalReps",
+            text = s.totalRepsLine(totalReps),
             color = secondaryText,
             fontSize = 14.sp
         )
@@ -471,7 +547,7 @@ fun WorkoutHistoryCard(
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.icon_pullups), null, Modifier.height(24.dp))
-            Text("Подтягивания: ${workout.pullUps}", color = text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+            Text(s.pullUpsLine(workout.pullUps), color = text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
         }
 
         Spacer(
@@ -480,7 +556,7 @@ fun WorkoutHistoryCard(
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.icon_dips), null, Modifier.height(24.dp))
-            Text("Брусья: ${workout.dips}", color = text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+            Text(s.dipsLine(workout.dips), color = text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
         }
 
         Spacer(
@@ -489,7 +565,7 @@ fun WorkoutHistoryCard(
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.icon_pushups), null, Modifier.height(24.dp))
-            Text("Отжимания: ${workout.pushUps}", color = text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+            Text(s.pushUpsLine(workout.pushUps), color = text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
         }
     }
 }
