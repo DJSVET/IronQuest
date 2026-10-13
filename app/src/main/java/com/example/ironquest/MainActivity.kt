@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -108,6 +109,10 @@ fun IronQuestApp() {
     val equippedItems by PlayerData
         .getEquipped(context)
         .collectAsState(initial = emptyMap())
+
+    val favoriteAchievementIds by PlayerData
+        .getFavoriteAchievementIds(context)
+        .collectAsState(initial = emptySet())
 
     val workoutHistory by WorkoutHistoryData
         .getHistory(context)
@@ -290,6 +295,7 @@ fun IronQuestApp() {
             coins = playerStats.coins,
             onEquip = { item -> scope.launch { PlayerData.equipItem(context, item) } },
             onUnequip = { item -> scope.launch { PlayerData.unequipItem(context, item) } },
+            onToggleLock = { item -> scope.launch { PlayerData.toggleItemLock(context, item) } },
             onSell = { item -> scope.launch { PlayerData.sellItem(context, item) } },
             onBack = { showInventory = false }
         )
@@ -302,6 +308,8 @@ fun IronQuestApp() {
             language = appLanguage,
             achievements = achievements,
             inventory = inventory,
+            favoriteAchievementIds = favoriteAchievementIds,
+            onToggleFavorite = { achievement -> scope.launch { PlayerData.toggleFavoriteAchievement(context, achievement.id) } },
             onBack = {
                 showAchievements = false
             }
@@ -470,7 +478,26 @@ fun IronQuestApp() {
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    PixelHero(equippedItemIds = equippedItems.values.toSet())
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        PixelHero(equippedItemIds = equippedItems.values.toSet())
+                        val favoriteAchievements = achievements.filter { favoriteAchievementIds.contains(it.id) }
+                        if (favoriteAchievements.isNotEmpty()) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                favoriteAchievements.forEach { achievement ->
+                                    Column(
+                                        modifier = Modifier
+                                            .background(Color(0xFF1A2A40), RoundedCornerShape(7.dp))
+                                            .border(1.dp, if (achievement.unlocked) Color(0xFFB8FF5C) else Color(0xFF52647C), RoundedCornerShape(7.dp))
+                                            .padding(5.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Image(painterResource(achievement.iconRes), achievement.title, Modifier.size(22.dp))
+                                        Text(achievement.title, color = Color(0xFFE7F0FF), fontSize = 7.sp, maxLines = 1)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -719,19 +746,22 @@ fun PixelHero(equippedItemIds: Set<String> = emptySet()) {
         )
 
         val overlayResources = buildList {
-            if (equippedItemIds.contains("forest_armor")) {
+            if (equippedItemIds.contains("forest_armor") || equippedItemIds.contains("vanguard_armor") || equippedItemIds.contains("night_armor")) {
                 add(R.drawable.gear_armor)
             }
             if (equippedItemIds.contains("worn_gloves") ||
-                equippedItemIds.contains("steel_bracer")
+                equippedItemIds.contains("steel_bracer") || equippedItemIds.contains("training_gloves") ||
+                equippedItemIds.contains("royal_gauntlets") || equippedItemIds.contains("ember_gloves")
             ) {
                 add(R.drawable.gear_gloves)
             }
-            if (equippedItemIds.contains("traveler_boots")) {
+            if (equippedItemIds.contains("traveler_boots") || equippedItemIds.contains("swift_boots") ||
+                equippedItemIds.contains("storm_boots") || equippedItemIds.contains("iron_greaves")) {
                 add(R.drawable.gear_boots)
             }
             if (equippedItemIds.contains("iron_helmet") ||
-                equippedItemIds.contains("legendary_crown")
+                equippedItemIds.contains("legendary_crown") || equippedItemIds.contains("ranger_hood") ||
+                equippedItemIds.contains("guardian_helm")
             ) {
                 add(R.drawable.gear_helmet)
             }

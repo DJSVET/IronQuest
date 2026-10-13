@@ -18,6 +18,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +37,8 @@ fun AchievementsScreen(
     language: AppLanguage = AppLanguage.RU,
     achievements: List<Achievement>,
     inventory: List<InventoryEntry> = emptyList(),
+    favoriteAchievementIds: Set<String> = emptySet(),
+    onToggleFavorite: (Achievement) -> Unit = {},
     onBack: () -> Unit
 ) {
     val s = strings(language)
@@ -40,6 +47,7 @@ fun AchievementsScreen(
     val text = Color(0xFFE7F0FF)
     val muted = Color(0xFF8194AD)
     val green = Color(0xFFB8FF5C)
+    var selectedFilter by remember { mutableStateOf("all") }
 
     Column(Modifier.fillMaxSize().background(background).verticalScroll(rememberScrollState()).padding(18.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -52,7 +60,20 @@ fun AchievementsScreen(
                 Text(s.backButton, color = text, fontWeight = FontWeight.Bold)
             }
         }
-        Spacer(Modifier.height(18.dp))
+        Text("★ Выбери до 3 любимых — они появятся рядом с персонажем", color = muted, fontSize = 10.sp)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("all" to "ВСЁ", "set" to "СЕТЫ", "achievement" to "ДОСТИЖЕНИЯ").forEach { (key, label) ->
+                TextButton(
+                    onClick = { selectedFilter = key },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColors(contentColor = if (selectedFilter == key) green else muted)
+                ) {
+                    Text(label, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
 
         val forestSet = listOf(
             "forest_armor" to ITEM_CATALOG.first { it.id == "forest_armor" }.name(language),
@@ -61,7 +82,7 @@ fun AchievementsScreen(
             "steel_bracer" to ITEM_CATALOG.first { it.id == "steel_bracer" }.name(language)
         )
         val collectedForestPieces = forestSet.count { (id, _) -> inventory.any { it.item.id == id && it.count > 0 } }
-        Column(
+        if (selectedFilter != "achievement") Column(
             Modifier.fillMaxWidth().padding(bottom = 14.dp)
                 .border(1.dp, Color(0xFFC49BFF).copy(alpha = 0.7f), RoundedCornerShape(12.dp))
                 .background(panel, RoundedCornerShape(12.dp)).padding(14.dp)
@@ -78,12 +99,16 @@ fun AchievementsScreen(
             Text(s.forestSetHint, color = muted, fontSize = 11.sp)
         }
 
-        achievements.forEachIndexed { index, achievement ->
+        achievements.filter { achievement ->
+            selectedFilter == "all" ||
+                (selectedFilter == "set" && achievement.category == AchievementCategory.SET) ||
+                (selectedFilter == "achievement" && achievement.category == AchievementCategory.ACHIEVEMENT)
+        }.forEach { achievement ->
             Row(Modifier.fillMaxWidth().padding(bottom = 10.dp)
                 .border(1.dp, if (achievement.unlocked) green.copy(alpha = 0.55f) else Color(0xFF293950), RoundedCornerShape(12.dp))
                 .background(panel, RoundedCornerShape(12.dp)).padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Image(painterResource(R.drawable.icon_achievements), null, Modifier.size(42.dp))
+                Image(painterResource(achievement.iconRes), achievement.title(language), Modifier.size(42.dp))
                 Column(Modifier.weight(1f)) {
                     Text(achievement.title(language), color = if (achievement.unlocked) green else text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
@@ -92,7 +117,12 @@ fun AchievementsScreen(
                     Text(if (achievement.unlocked) s.receivedReward(achievement.rewardXp) else s.reward(achievement.rewardXp),
                         color = if (achievement.unlocked) green else Color(0xFFFFC84A), fontSize = 10.sp, fontWeight = FontWeight.Black)
                 }
-                Text(if (achievement.unlocked) "✓" else "—", color = if (achievement.unlocked) green else muted, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (achievement.unlocked) "✓" else "—", color = if (achievement.unlocked) green else muted, fontSize = 18.sp, fontWeight = FontWeight.Black)
+                    TextButton(onClick = { onToggleFavorite(achievement) }) {
+                        Text(if (favoriteAchievementIds.contains(achievement.id)) "★" else "☆", color = if (favoriteAchievementIds.contains(achievement.id)) Color(0xFFFFC84A) else muted, fontSize = 22.sp)
+                    }
+                }
             }
         }
     }

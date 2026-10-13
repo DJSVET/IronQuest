@@ -37,7 +37,8 @@ data class ItemDefinition(
 
 data class InventoryEntry(
     val item: ItemDefinition,
-    val count: Int
+    val count: Int,
+    val locked: Boolean = false
 )
 
 val ITEM_CATALOG = listOf(
@@ -60,7 +61,41 @@ val ITEM_CATALOG = listOf(
     ItemDefinition("iron_helmet", "Железный шлем", R.drawable.item_helmet, ItemRarity.EPIC,
         "Надёжный шлем с защитным забралом.", slot = "head", overlayRes = R.drawable.gear_helmet),
     ItemDefinition("legendary_crown", "Корона чемпиона", R.drawable.item_legendary_crown, ItemRarity.LEGENDARY,
-        "Легендарная награда для тех, кто не сдаётся.", slot = "head", overlayRes = R.drawable.gear_helmet)
+        "Легендарная награда для тех, кто не сдаётся.", slot = "head", overlayRes = R.drawable.gear_helmet),
+    ItemDefinition("ember_gloves", "Перчатки искры", R.drawable.item_gloves, ItemRarity.RARE,
+        "Усиленные перчатки для взрывных подходов.", slot = "hands", overlayRes = R.drawable.gear_gloves),
+    ItemDefinition("guardian_helm", "Шлем стража", R.drawable.item_helmet, ItemRarity.RARE,
+        "Шлем для тех, кто держит темп до конца.", slot = "head", overlayRes = R.drawable.gear_helmet),
+    ItemDefinition("night_armor", "Ночная броня", R.drawable.item_armor, ItemRarity.LEGENDARY,
+        "Тяжёлая броня с редким тёмным сплавом.", slot = "body", overlayRes = R.drawable.gear_armor),
+    ItemDefinition("swift_boots", "Быстрые сапоги", R.drawable.item_boots, ItemRarity.UNCOMMON,
+        "Лёгкие сапоги для ежедневных тренировок.", slot = "feet", overlayRes = R.drawable.gear_boots),
+    ItemDefinition("ancient_crystal", "Древний кристалл", R.drawable.item_crystal, ItemRarity.MYTHIC,
+        "Мифический кристалл, который почти невозможно найти."),
+    ItemDefinition("champion_charm", "Талисман чемпиона", R.drawable.item_charm, ItemRarity.EPIC,
+        "Редкий талисман для длинных серий."),
+    ItemDefinition("golden_token", "Золотой жетон", R.drawable.item_token, ItemRarity.LEGENDARY,
+        "Жетон за упорство, достойный коллекции."),
+    ItemDefinition("training_gloves", "Перчатки спартанца", R.drawable.item_gloves, ItemRarity.UNCOMMON,
+        "Надёжные перчатки для тяжёлых подходов.", slot = "hands", overlayRes = R.drawable.gear_gloves),
+    ItemDefinition("vanguard_armor", "Доспех авангарда", R.drawable.item_armor, ItemRarity.RARE,
+        "Лёгкая броня для тех, кто всегда идёт первым.", slot = "body", overlayRes = R.drawable.gear_armor),
+    ItemDefinition("storm_boots", "Сапоги грозы", R.drawable.item_boots, ItemRarity.EPIC,
+        "Редкие сапоги, символ скорости и дисциплины.", slot = "feet", overlayRes = R.drawable.gear_boots),
+    ItemDefinition("ranger_hood", "Капюшон следопыта", R.drawable.item_helmet, ItemRarity.UNCOMMON,
+        "Капюшон опытного охотника за трофеями.", slot = "head", overlayRes = R.drawable.gear_helmet),
+    ItemDefinition("sun_crystal", "Солнечный кристалл", R.drawable.item_crystal, ItemRarity.RARE,
+        "Кристалл, хранящий тепло сотни тренировок."),
+    ItemDefinition("champion_badge", "Знак чемпиона", R.drawable.item_token, ItemRarity.EPIC,
+        "Знак за постоянство и характер."),
+    ItemDefinition("phoenix_charm", "Амулет феникса", R.drawable.item_charm, ItemRarity.LEGENDARY,
+        "Напоминает, что после каждой неудачи можно подняться."),
+    ItemDefinition("iron_greaves", "Железные поножи", R.drawable.item_boots, ItemRarity.RARE,
+        "Защита для долгих испытаний.", slot = "feet", overlayRes = R.drawable.gear_boots),
+    ItemDefinition("void_core", "Ядро пустоты", R.drawable.item_crystal, ItemRarity.MYTHIC,
+        "Мифический артефакт из неизвестного мира."),
+    ItemDefinition("royal_gauntlets", "Королевские перчатки", R.drawable.item_gloves, ItemRarity.LEGENDARY,
+        "Элитная экипировка настоящего чемпиона.", slot = "hands", overlayRes = R.drawable.gear_gloves)
 )
 
 

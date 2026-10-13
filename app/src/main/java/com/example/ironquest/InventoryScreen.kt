@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ fun InventoryScreen(
     coins: Int,
     onEquip: (ItemDefinition) -> Unit,
     onUnequip: (ItemDefinition) -> Unit,
+    onToggleLock: (ItemDefinition) -> Unit,
     onSell: (ItemDefinition) -> Unit,
     onBack: () -> Unit
 ) {
@@ -89,6 +91,13 @@ fun InventoryScreen(
                             Spacer(Modifier.height(4.dp))
                             Text(s.quantity(entry.count), color = IqGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
+                        IconButton(onClick = { onToggleLock(item) }, modifier = Modifier.size(42.dp)) {
+                            Text(
+                                if (entry.locked) "🔒" else "🔓",
+                                color = if (entry.locked) Color(0xFFFFC84A) else IqMuted,
+                                fontSize = 20.sp
+                            )
+                        }
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(item.description(language), color = IqMuted, fontSize = 12.sp)
@@ -111,11 +120,20 @@ fun InventoryScreen(
                     Spacer(Modifier.height(8.dp))
                     Button(
                         onClick = { onSell(item) },
+                        enabled = !entry.locked,
                         modifier = Modifier.fillMaxWidth().height(40.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B3540)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF7B3540),
+                            disabledContainerColor = Color(0xFF30394A)
+                        ),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text(s.sellFor(item.sellPrice), color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                        Text(
+                            if (entry.locked) "🔒 ${s.sellFor(item.sellPrice)}" else s.sellFor(item.sellPrice),
+                            color = if (entry.locked) IqMuted else Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }

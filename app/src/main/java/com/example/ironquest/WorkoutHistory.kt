@@ -455,7 +455,7 @@ fun ProgressGraph(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight((value.toFloat() / maxValue).coerceAtLeast(0.06f))
+                                .height((value.toFloat() / maxValue * 92f).coerceAtLeast(4f).dp)
                                 .background(accent, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                         )
                     }

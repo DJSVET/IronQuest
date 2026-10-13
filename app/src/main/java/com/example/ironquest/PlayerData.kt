@@ -31,6 +31,8 @@ object PlayerData {
     private val BACK_KEY = intPreferencesKey("back_reps")
     private val CHEST_KEY = intPreferencesKey("chest_reps")
     private val CLAIMED_ACHIEVEMENTS_KEY = stringSetPreferencesKey("claimed_achievements")
+    private val FAVORITE_ACHIEVEMENTS_KEY = stringSetPreferencesKey("favorite_achievements")
+    private val LOCKED_ITEMS_KEY = stringSetPreferencesKey("locked_items")
     private val EQUIPMENT_SLOTS = listOf("head", "body", "hands", "feet")
 
     fun getStats(context: Context): Flow<PlayerStats> {
@@ -77,10 +79,34 @@ object PlayerData {
     /** Current item collection, including quantities for duplicate drops. */
     fun getInventory(context: Context): Flow<List<InventoryEntry>> {
         return context.dataStore.data.map { preferences ->
+            val lockedItems = preferences[LOCKED_ITEMS_KEY] ?: emptySet()
             ITEM_CATALOG.mapNotNull { item ->
                 val count = preferences[intPreferencesKey("item_${item.id}")] ?: 0
-                if (count > 0) InventoryEntry(item = item, count = count) else null
+                if (count > 0) InventoryEntry(item = item, count = count, locked = lockedItems.contains(item.id)) else null
             }
+        }
+    }
+
+    fun getFavoriteAchievementIds(context: Context): Flow<Set<String>> =
+        context.dataStore.data.map { preferences -> preferences[FAVORITE_ACHIEVEMENTS_KEY] ?: emptySet() }
+
+    suspend fun toggleFavoriteAchievement(context: Context, achievementId: String) {
+        context.dataStore.edit { preferences ->
+            val favorites = (preferences[FAVORITE_ACHIEVEMENTS_KEY] ?: emptySet()).toMutableSet()
+            if (!favorites.remove(achievementId) && favorites.size < 3) {
+                favorites.add(achievementId)
+            }
+            preferences[FAVORITE_ACHIEVEMENTS_KEY] = favorites
+        }
+    }
+
+    suspend fun toggleItemLock(context: Context, item: ItemDefinition) {
+        context.dataStore.edit { preferences ->
+            val lockedItems = (preferences[LOCKED_ITEMS_KEY] ?: emptySet()).toMutableSet()
+            if (!lockedItems.remove(item.id)) {
+                lockedItems.add(item.id)
+            }
+            preferences[LOCKED_ITEMS_KEY] = lockedItems
         }
     }
 
@@ -186,7 +212,8 @@ object PlayerData {
             val equipped = EQUIPMENT_SLOTS.any { slot ->
                 preferences[stringPreferencesKey("equipped_$slot")] == item.id
             }
-            if (count > 0 && !(equipped && count == 1)) {
+            val locked = (preferences[LOCKED_ITEMS_KEY] ?: emptySet()).contains(item.id)
+            if (count > 0 && !locked && !(equipped && count == 1)) {
                 preferences[itemKey] = count - 1
                 earnedCoins = item.sellPrice
                 preferences[COINS_KEY] = (preferences[COINS_KEY] ?: 0) + earnedCoins
