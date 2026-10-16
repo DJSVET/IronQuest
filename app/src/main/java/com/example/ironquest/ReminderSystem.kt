@@ -84,7 +84,7 @@ object ReminderScheduler {
 class WorkoutReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         createNotificationChannel(context)
-        val s = strings(AppPreferences.getLanguage(context))
+        val lang = AppPreferences.getLanguage(context)
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -98,21 +98,25 @@ class WorkoutReminderReceiver : BroadcastReceiver() {
                 }.timeInMillis
                 val workedOutToday = latestWorkout != null && latestWorkout.timestamp >= today
 
-                if (!workedOutToday) {
+                val player = PlayerData.state(context).first()
+                val todayIsRest = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) in player.restDays
+
+                if (!workedOutToday && !todayIsRest) {
                     val workoutReminder = ReminderSettings.workoutEnabled(context)
                     val streakReminder = ReminderSettings.streakEnabled(context)
-                    val streak = calculateStreak(history)
+                    val streak = calculateStreak(history, player.restDays, player.frozenDays)
 
                     val title: String
                     val message: String
                     when {
                         streakReminder && streak > 0 -> {
-                            title = s.streakReminderTitle
-                            message = s.streakReminderMessage(streak)
+                            title = tr(lang, "Не теряй серию!", "Keep your streak!")
+                            message = tr(lang, "Твоя серия — $streak ${plural(streak, "день", "дня", "дней")}. Сделай тренировку сегодня, чтобы огонь не погас.",
+                                "Your streak is $streak days. Train today to keep the fire burning.")
                         }
                         workoutReminder -> {
-                            title = s.workoutReminderTitle
-                            message = s.workoutReminderMessage
+                            title = tr(lang, "Время тренировки", "Workout time")
+                            message = tr(lang, "Герой ждёт! Пора сделать ещё один шаг к новому уровню.", "Your hero awaits! Time to take another step toward a new level.")
                         }
                         else -> return@launch
                     }
@@ -127,7 +131,7 @@ class WorkoutReminderReceiver : BroadcastReceiver() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                     val notification = NotificationCompat.Builder(context, "ironquest_workouts")
-                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setSmallIcon(R.drawable.ic_notification)
                         .setContentTitle(title)
                         .setContentText(message)
                         .setStyle(NotificationCompat.BigTextStyle().bigText(message))
@@ -150,13 +154,13 @@ class WorkoutReminderReceiver : BroadcastReceiver() {
 
     private fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val s = strings(AppPreferences.getLanguage(context))
+            val lang = AppPreferences.getLanguage(context)
             val channel = NotificationChannel(
                 "ironquest_workouts",
-                s.reminderChannelName,
+                tr(lang, "Напоминания IronQuest", "IronQuest reminders"),
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = s.reminderChannelDescription
+                description = tr(lang, "Напоминания о тренировках и серии", "Workout and streak reminders")
             }
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)

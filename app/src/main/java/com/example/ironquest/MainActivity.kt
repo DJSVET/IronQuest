@@ -2,12 +2,22 @@ package com.example.ironquest
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.border
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,1077 +26,385 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        setContent {
-            IronQuestApp()
-        }
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
+        setContent { IronQuestApp() }
     }
+}
+
+enum class Screen(val isTab: Boolean = false) {
+    HOME(true), INVENTORY(true), SHOP(true), ACHIEVEMENTS(true),
+    WORKOUT, RESULT, HISTORY, EXERCISES, SETTINGS
 }
 
 @Composable
 fun IronQuestApp() {
-
-    val background = Color(0xFF080F1B)
-    val panel = Color(0xFF111E30)
-    val accent = Color(0xFFB8FF5C)
-    val text = Color(0xFFE7F0FF)
-    val secondaryText = Color(0xFF8194AD)
-
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var appLanguage by remember { mutableStateOf(AppPreferences.getLanguage(context)) }
-    val s = strings(appLanguage)
+    var language by remember { mutableStateOf(AppPreferences.getLanguage(context)) }
+    var haptics by remember { mutableStateOf(AppPreferences.hapticsEnabled(context)) }
 
-    // Проверка новых релизов при запуске и далее периодически в фоне.
-    LaunchedEffect(Unit) {
-        UpdateCheckScheduler.schedule(context.applicationContext)
+    LaunchedEffect(Unit) { UpdateCheckScheduler.schedule(context.applicationContext) }
+
+    val stateFlow = remember { PlayerData.state(context.applicationContext) }
+    val historyFlow = remember { WorkoutHistoryData.getHistory(context.applicationContext) }
+    val state by stateFlow.collectAsState(initial = PlayerState())
+    val historyOrNull by historyFlow.collectAsState(initial = null)
+    val history = historyOrNull ?: emptyList()
+
+    val equipped = remember(state.equippedIds) { state.equipped }
+    val level = getLevelInfo(state.xp)
+    val heroStats = remember(history, state.customExercises, equipped, level.level) {
+        computeHeroStats(history, state.customExercises, equipped, level.level)
     }
-
-    val playerStats by PlayerData
-        .getStats(context)
-        .collectAsState(
-            initial = PlayerStats(
-                xp = 0,
-                armsReps = 0,
-                shouldersReps = 0,
-                backReps = 0,
-                chestReps = 0,
-                coins = 0
+    val streak = remember(history, state.restDays, state.frozenDays) { calculateStreak(history, state.restDays, state.frozenDays) }
+    val best = remember(history, state.restDays, state.frozenDays) { bestStreak(history, state.restDays, state.frozenDays) }
+    val achievements = remember(history, state, heroStats, best) {
+        getAchievements(
+            AchievementInput(
+                history = history, custom = state.customExercises, totalXp = state.xp, bestStreak = best,
+                ownedItems = state.items, counters = state.counters, stats = heroStats,
+                equippedCount = equipped.size, ownedThemes = state.ownedThemes.size,
+                restDaysUnlocked = state.restDaysUnlocked, restDays = state.restDays,
             )
         )
-
-    val levelInfo = getLevelInfo(playerStats.xp)
-
-    val level = levelInfo.level
-    val levelXp = levelInfo.currentXp
-    val levelRequiredXp = levelInfo.requiredXp
-
-    val inventory by PlayerData
-        .getInventory(context)
-        .collectAsState(initial = emptyList())
-
-    val equippedItems by PlayerData
-        .getEquipped(context)
-        .collectAsState(initial = emptyMap())
-
-    val favoriteAchievementIds by PlayerData
-        .getFavoriteAchievementIds(context)
-        .collectAsState(initial = emptySet())
-
-    val workoutHistory by WorkoutHistoryData
-        .getHistory(context)
-        .collectAsState(initial = emptyList())
-
-    val currentStreak = calculateStreak(workoutHistory)
-
-    val achievements = getAchievements(
-        history = workoutHistory,
-        totalXp = playerStats.xp,
-        streak = currentStreak,
-        inventory = inventory
-    )
-
-    val unlockedAchievements = achievements.count {
-        it.unlocked
     }
+    val toasts = remember { mutableStateListOf<GameToast>() }
+    val sessionAchievements = remember { mutableStateListOf<Achievement>() }
 
-    // Автоматически выдаём XP за новые достижения, сохраняя защиту от повторной награды.
-    LaunchedEffect(achievements.map { it.id to it.unlocked }) {
-        PlayerData.awardUnlockedAchievements(
-            context = context,
-            achievements = achievements.filter { it.unlocked }
-        )
-    }
-
-
-
-    var showWorkout by remember { mutableStateOf(false) }
-    var showResult by remember { mutableStateOf(false) }
-    var showHistory by remember { mutableStateOf(false) }
-    var showAchievements by remember { mutableStateOf(false) }
-    var showInventory by remember { mutableStateOf(false) }
-    var showSettings by remember { mutableStateOf(false) }
-    var showShop by remember { mutableStateOf(false) }
-    var lastWorkoutCoins by remember { mutableStateOf(0) }
-    var lastShopReward by remember { mutableStateOf<ItemDefinition?>(null) }
-    var lastXp by remember { mutableStateOf(0) }
-    var lastTotalXp by remember { mutableStateOf(0) }
-    var isSavingWorkout by remember { mutableStateOf(false) }
-    var lastDroppedItem by remember { mutableStateOf<ItemDefinition?>(null) }
-
-    // Системная кнопка/жест «Назад»: закрывает текущий экран, а не всё приложение.
-    // На главном экране стандартное поведение Android (выход) сохраняется.
-    BackHandler(enabled = !showWorkout) {
-        when {
-            showResult -> showResult = false
-            showHistory -> showHistory = false
-            showSettings -> showSettings = false
-            showInventory -> showInventory = false
-            showAchievements -> showAchievements = false
-            showShop -> { showShop = false; lastShopReward = null }
-            else -> (context as? android.app.Activity)?.finish()
+    // Выдаём награды за новые достижения (один раз за каждое).
+    val unlockedIds = achievements.filter { it.unlocked }.map { it.id }
+    LaunchedEffect(unlockedIds, state.loaded, historyOrNull != null) {
+        if (!state.loaded || historyOrNull == null) return@LaunchedEffect
+        if (unlockedIds.all { it in state.claimedAchievements }) return@LaunchedEffect
+        val fresh = PlayerData.awardUnlockedAchievements(context, achievements)
+        sessionAchievements.addAll(fresh)
+        if (fresh.size > 3) {
+            toasts.add(GameToast(System.nanoTime(), "trophy", tr(language, "ОТКРЫТО ДОСТИЖЕНИЙ: ${fresh.size}", "${fresh.size} ACHIEVEMENTS"),
+                "+${fresh.sumOf { it.rewardXp }} XP · +${fresh.sumOf { it.rewardCoins }} " + tr(language, "монет", "coins"), Color(0xFFFFD75A)))
+        } else fresh.forEach { a ->
+            toasts.add(GameToast(System.nanoTime(), achievementIcon(a.icon), tr(language, "ДОСТИЖЕНИЕ!", "ACHIEVEMENT!"),
+                "${a.title(language)} · +${a.rewardXp} XP" + if (a.rewardCoins > 0) " · +${a.rewardCoins}🪙" else "", Color(0xFFFFD75A)))
         }
     }
 
-    if (showWorkout) {
+    // Заморозки серии срабатывают автоматически при запуске.
+    var freezesChecked by remember { mutableStateOf(false) }
+    LaunchedEffect(state.loaded, historyOrNull != null) {
+        if (!freezesChecked && state.loaded && historyOrNull != null) {
+            freezesChecked = true
+            val used = PlayerData.applyStreakFreezes(context, history)
+            if (used > 0) toasts.add(GameToast(System.nanoTime(), "snowflake", tr(language, "СЕРИЯ СПАСЕНА!", "STREAK SAVED!"),
+                tr(language, "Потрачено заморозок: $used", "Freezes used: $used"), Color(0xFF8FE8FF)))
+        }
+    }
 
-        WorkoutScreen(
-            language = appLanguage,
-            isSaving = isSavingWorkout,
-            onFinish = { xp, armsReps, shouldersReps, backReps, chestReps, pullUps, dips, pushUps ->
-                if (!isSavingWorkout) {
-                    isSavingWorkout = true
-                    lastXp = xp
-                    lastDroppedItem = null
+    var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
+    var slotFilter by remember { mutableStateOf<ItemSlot?>(null) }
+    var reward by remember { mutableStateOf<WorkoutReward?>(null) }
+    var resultAchievementsFrom by remember { mutableStateOf(0) }
+    var saving by remember { mutableStateOf(false) }
 
-                    scope.launch {
-                        try {
-                            // Сначала полностью сохраняем тренировку и награды, и только потом открываем результат.
-                            lastWorkoutCoins = PlayerData.addWorkout(
-                                context = context,
-                                xp = xp,
-                                armsReps = armsReps,
-                                shouldersReps = shouldersReps,
-                                backReps = backReps,
-                                chestReps = chestReps
-                            )
+    BackHandler(enabled = screen != Screen.HOME && screen != Screen.WORKOUT) {
+        screen = when (screen) {
+            Screen.EXERCISES, Screen.HISTORY, Screen.SETTINGS, Screen.RESULT -> Screen.HOME
+            else -> Screen.HOME
+        }
+    }
 
-                            WorkoutHistoryData.addWorkout(
-                                context = context,
-                                xp = xp,
-                                pullUps = pullUps,
-                                dips = dips,
-                                pushUps = pushUps
-                            )
+    fun toast(icon: String, title: String, sub: String, color: Color = Color(0xFFB8FF5C)) {
+        toasts.add(GameToast(System.nanoTime(), icon, title, sub, color))
+    }
 
-                            val totalReps = pullUps + dips + pushUps
-                            lastDroppedItem = PlayerData.rollAndSaveDrop(context, totalReps)
-                            lastTotalXp = playerStats.xp + xp
-                            showWorkout = false
-                            showResult = true
-                        } finally {
-                            isSavingWorkout = false
-                        }
-                    }
+    ProvideGameTheme(state.activeTheme, language, haptics) {
+        val pal = LocalPalette.current
+        MaterialTheme(colorScheme = darkColorScheme(primary = pal.accent, background = pal.bg, surface = pal.panel)) {
+            Box(Modifier.fillMaxSize().gameBackground()) {
+                if (!state.loaded || historyOrNull == null) {
+                    LoadingScreen()
+                    return@Box
                 }
-            },
-            onBack = {
-                if (!isSavingWorkout) showWorkout = false
-            }
-        )
-
-        return
-    }
-
-    if (showResult) {
-
-        WorkoutResultScreen(
-            language = appLanguage,
-            xp = lastXp,
-            totalXp = lastTotalXp,
-            droppedItem = lastDroppedItem,
-            coinsEarned = lastWorkoutCoins,
-            onContinue = {
-                showResult = false
-            }
-        )
-
-        return
-    }
-
-    if (showShop) {
-        ShopScreen(
-            language = appLanguage,
-            coins = playerStats.coins,
-            onOpenCase = { shopCase ->
-                scope.launch {
-                    when (val result = PlayerData.openCase(context, shopCase)) {
-                        is CaseOpenResult.Success -> lastShopReward = result.item
-                        CaseOpenResult.NotEnoughCoins -> lastShopReward = null
-                        CaseOpenResult.EmptyCatalog -> lastShopReward = null
-                    }
-                }
-            },
-            rewardItem = lastShopReward,
-            onDismissReward = { lastShopReward = null },
-            onBack = { showShop = false; lastShopReward = null }
-        )
-        return
-    }
-
-    if (showHistory) {
-
-        WorkoutHistoryScreen(
-            language = appLanguage,
-            context = context,
-            onBack = {
-                showHistory = false
-            }
-        )
-
-        return
-    }
-
-    if (showSettings) {
-        SettingsScreen(
-            language = appLanguage,
-            onBack = { showSettings = false },
-            onLanguageChange = { selected ->
-                AppPreferences.setLanguage(context, selected)
-                appLanguage = selected
-            },
-            onResetProgress = {
-                scope.launch {
-                    PlayerData.resetProgress(context)
-                    WorkoutHistoryData.clearHistory(context)
-                    showSettings = false
-                }
-            }
-        )
-        return
-    }
-
-    if (showInventory) {
-        InventoryScreen(
-            language = appLanguage,
-            items = inventory,
-            equippedItemIds = equippedItems,
-            coins = playerStats.coins,
-            onEquip = { item -> scope.launch { PlayerData.equipItem(context, item) } },
-            onUnequip = { item -> scope.launch { PlayerData.unequipItem(context, item) } },
-            onToggleLock = { item -> scope.launch { PlayerData.toggleItemLock(context, item) } },
-            onSell = { item -> scope.launch { PlayerData.sellItem(context, item) } },
-            onBack = { showInventory = false }
-        )
-        return
-    }
-
-    if (showAchievements) {
-
-        AchievementsScreen(
-            language = appLanguage,
-            achievements = achievements,
-            inventory = inventory,
-            favoriteAchievementIds = favoriteAchievementIds,
-            onToggleFavorite = { achievement -> scope.launch { PlayerData.toggleFavoriteAchievement(context, achievement.id) } },
-            onBack = {
-                showAchievements = false
-            }
-        )
-
-        return
-    }
-
-    MaterialTheme {
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFF080F1B))
-                .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "IRONQUEST",
-                        color = Color(0xFFE7F0FF),
-                        fontSize = 25.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(
-                        text = s.tagline,
-                        color = Color(0xFF7E8AA3),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Box(
-                        modifier = Modifier
-                            .background(Color(0xFF1A2A40), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 9.dp)
-                    ) {
-                        Text(
-                            text = s.streak(currentStreak),
-                            color = Color(0xFFB8FF5C),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    IconButton(
-                        onClick = { showSettings = true },
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Text("⚙", color = Color(0xFFB8FF5C), fontSize = 23.sp)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            val lastWorkoutLabel = workoutHistory.firstOrNull()?.let { record ->
-                val workoutDate = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
-                    .format(java.util.Date(record.timestamp))
-                val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
-                    .format(java.util.Date())
-                val yesterday = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
-                    .format(java.util.Date(System.currentTimeMillis() - 24L * 60L * 60L * 1000L))
-                when (workoutDate) {
-                    today -> s.lastWorkoutToday
-                    yesterday -> s.lastWorkoutYesterday
-                    else -> s.lastWorkoutDate(java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(java.util.Date(record.timestamp)))
-                }
-            } ?: s.lastWorkoutNone
-            Text(
-                text = lastWorkoutLabel,
-                color = Color(0xFF8194AD),
-                fontSize = 11.sp,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TopGameIcon(R.drawable.icon_history, s.history, Modifier.weight(1f)) { showHistory = true }
-                TopGameIcon(R.drawable.icon_achievements, s.rewardsCount(unlockedAchievements, achievements.size), Modifier.weight(1f)) { showAchievements = true }
-                TopGameIcon(R.drawable.icon_inventory, s.inventoryWithCount(inventory.sumOf { it.count }), Modifier.weight(1f)) { showInventory = true }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = { showShop = true },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF223148)),
-                shape = RoundedCornerShape(6.dp)
-            ) {
-                Text(s.caseShop, color = Color(0xFF5CE1FF), fontWeight = FontWeight.Black)
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            val ctaTransition = rememberInfiniteTransition(label = "workout_cta")
-            val ctaScale by ctaTransition.animateFloat(
-                initialValue = 1f, targetValue = 1.025f,
-                animationSpec = infiniteRepeatable(tween(800), repeatMode = RepeatMode.Reverse),
-                label = "cta_scale"
-            )
-            Button(
-                onClick = { showWorkout = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(58.dp)
-                    .graphicsLayer { scaleX = ctaScale; scaleY = ctaScale },
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFB8FF5C)
-                )
-            ) {
-                Text(
-                    text = s.startWorkout,
-                    color = Color(0xFF080F1B),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.5.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = s.workoutMotivation,
-                color = Color(0xFF566178),
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.7.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF111E30), RoundedCornerShape(12.dp))
-                    .padding(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = s.yourHero,
-                            color = Color(0xFF7E8AA3),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp
-                        )
-                        Spacer(modifier = Modifier.height(5.dp))
-                        Text(
-                            text = s.fighter,
-                            color = Color(0xFFE7F0FF),
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                        Text(
-                            text = s.level(level),
-                            color = Color(0xFFB8FF5C),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        PixelHero(equippedItemIds = equippedItems.values.toSet())
-                        val favoriteAchievements = achievements.filter { favoriteAchievementIds.contains(it.id) }
-                        if (favoriteAchievements.isNotEmpty()) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                                favoriteAchievements.forEach { achievement ->
-                                    Column(
-                                        modifier = Modifier
-                                            .background(Color(0xFF1A2A40), RoundedCornerShape(7.dp))
-                                            .border(1.dp, if (achievement.unlocked) Color(0xFFB8FF5C) else Color(0xFF52647C), RoundedCornerShape(7.dp))
-                                            .padding(5.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Image(painterResource(achievement.iconRes), achievement.title, Modifier.size(22.dp))
-                                        Text(achievement.title, color = Color(0xFFE7F0FF), fontSize = 7.sp, maxLines = 1)
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)) {
+                        AnimatedContent(
+                            targetState = screen,
+                            transitionSpec = {
+                                if (targetState.isTab && initialState.isTab) {
+                                    fadeIn(tween(180)) togetherWith fadeOut(tween(120))
+                                } else if (!targetState.isTab) {
+                                    (slideInHorizontally(tween(260)) { it / 3 } + fadeIn(tween(200))) togetherWith fadeOut(tween(150))
+                                } else {
+                                    (slideInHorizontally(tween(260)) { -it / 3 } + fadeIn(tween(200))) togetherWith fadeOut(tween(150))
+                                }
+                            },
+                            label = "screens",
+                        ) { s ->
+                            when (s) {
+                                Screen.HOME -> HomeScreen(
+                                    state = state, history = history, level = level, stats = heroStats, streak = streak,
+                                    bestStreak = best, achievements = achievements,
+                                    onOpenSettings = { screen = Screen.SETTINGS },
+                                    onOpenHistory = { screen = Screen.HISTORY },
+                                    onOpenExercises = { screen = Screen.EXERCISES },
+                                    onOpenSlot = { slot -> slotFilter = slot; screen = Screen.INVENTORY },
+                                    onSaveRestDays = { days -> scope.launch { PlayerData.setRestDays(context, days) } },
+                                    onSaveHero = { name, look ->
+                                        scope.launch { PlayerData.setHeroName(context, name); PlayerData.setHeroLook(context, look) }
+                                    },
+                                    onGoShop = { screen = Screen.SHOP },
+                                )
+                                Screen.INVENTORY -> InventoryScreen(
+                                    state = state, stats = heroStats, slotFilter = slotFilter,
+                                    onSlotFilter = { slotFilter = it },
+                                    onEquip = { scope.launch { PlayerData.equipItem(context, it) } },
+                                    onUnequip = { scope.launch { PlayerData.unequipItem(context, it) } },
+                                    onToggleLock = { scope.launch { PlayerData.toggleItemLock(context, it) } },
+                                    onSell = { item, count ->
+                                        scope.launch {
+                                            val got = PlayerData.sellItem(context, item, count)
+                                            if (got > 0) toast("coin", tr(language, "ПРОДАНО", "SOLD"), "${item.name(language)} · +$got🪙", pal.gold)
+                                        }
+                                    },
+                                    onSellDuplicates = {
+                                        scope.launch {
+                                            val got = PlayerData.sellDuplicates(context)
+                                            toast("coin", tr(language, "ДУБЛИКАТЫ ПРОДАНЫ", "DUPLICATES SOLD"), "+$got🪙", pal.gold)
+                                        }
+                                    },
+                                )
+                                Screen.SHOP -> ShopScreen(
+                                    state = state,
+                                    onToast = { icon, title, sub -> toast(icon, title, sub, pal.gold) },
+                                )
+                                Screen.ACHIEVEMENTS -> AchievementsScreen(
+                                    state = state, achievements = achievements,
+                                    onToggleFavorite = { a -> scope.launch { PlayerData.toggleFavoriteAchievement(context, a.id) } },
+                                    onEquipSet = { set ->
+                                        scope.launch {
+                                            PlayerData.equipSet(context, set)
+                                            toast(set.pieces.first().iconKey(), tr(language, "СЕТ НАДЕТ", "SET EQUIPPED"), set.title.get(language))
+                                        }
+                                    },
+                                )
+                                Screen.WORKOUT -> WorkoutScreen(
+                                    state = state, history = history, perks = heroStats.perks, isSaving = saving,
+                                    onBack = { if (!saving) screen = Screen.HOME },
+                                    onFinish = { entries, duration ->
+                                        if (!saving) {
+                                            saving = true
+                                            scope.launch {
+                                                try {
+                                                    resultAchievementsFrom = sessionAchievements.size
+                                                    reward = PlayerData.completeWorkout(context, entries, duration, state, heroStats.perks)
+                                                    screen = Screen.RESULT
+                                                } finally {
+                                                    saving = false
+                                                }
+                                            }
+                                        }
+                                    },
+                                )
+                                Screen.RESULT -> {
+                                    val r = reward
+                                    if (r == null) {
+                                        LaunchedEffect(Unit) { screen = Screen.HOME }
+                                    } else {
+                                        WorkoutResultScreen(
+                                            reward = r, state = state, totalXp = state.xp,
+                                            newAchievements = sessionAchievements.drop(resultAchievementsFrom),
+                                            onContinue = { screen = Screen.HOME; reward = null },
+                                        )
                                     }
                                 }
+                                Screen.HISTORY -> WorkoutHistoryScreen(
+                                    history = history, custom = state.customExercises,
+                                    onBack = { screen = Screen.HOME },
+                                )
+                                Screen.EXERCISES -> ExercisesScreen(
+                                    state = state,
+                                    onBack = { screen = Screen.HOME },
+                                    onToggle = { id, on ->
+                                        scope.launch {
+                                            val ids = if (on) state.selectedExercises + id else state.selectedExercises - id
+                                            PlayerData.setSelectedExercises(context, ids)
+                                        }
+                                    },
+                                    onSaveCustom = { ex ->
+                                        scope.launch {
+                                            PlayerData.saveCustomExercise(context, ex)
+                                            PlayerData.setSelectedExercises(context, state.selectedExercises + ex.id)
+                                        }
+                                    },
+                                    onArchive = { ex -> scope.launch { PlayerData.archiveCustomExercise(context, ex.id) } },
+                                    onStartWorkout = { screen = Screen.WORKOUT },
+                                )
+                                Screen.SETTINGS -> SettingsScreen(
+                                    state = state,
+                                    haptics = haptics,
+                                    onBack = { screen = Screen.HOME },
+                                    onLanguageChange = { l -> AppPreferences.setLanguage(context, l); language = l },
+                                    onHapticsChange = { h -> AppPreferences.setHapticsEnabled(context, h); haptics = h },
+                                    onSaveRestDays = { days -> scope.launch { PlayerData.setRestDays(context, days) } },
+                                    onResetProgress = {
+                                        scope.launch {
+                                            PlayerData.resetProgress(context)
+                                            WorkoutHistoryData.clearHistory(context)
+                                            sessionAchievements.clear()
+                                            screen = Screen.HOME
+                                        }
+                                    },
+                                )
                             }
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = s.experience,
-                        color = Color(0xFF7E8AA3),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "$levelXp / $levelRequiredXp XP",
-                        color = Color(0xFFE7F0FF),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(modifier = Modifier.height(7.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(12.dp)
-                        .background(Color(0xFF30394A), RoundedCornerShape(3.dp))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(
-                                (levelXp.toFloat() / levelRequiredXp.toFloat()).coerceIn(0f, 1f)
-                            )
-                            .height(12.dp)
-                            .background(Color(0xFFB8FF5C), RoundedCornerShape(3.dp))
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(
-                        text = s.totalEarned(playerStats.xp),
-                        color = Color(0xFF7E8AA3),
-                        fontSize = 11.sp
-                    )
-                    Text(
-                        text = "🪙 ${playerStats.coins}",
-                        color = Color(0xFFFFC84A),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            WorkoutComparisonCard(history = workoutHistory, language = appLanguage)
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = s.attributes,
-                    color = Color(0xFFE7F0FF),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = s.stats,
-                    color = Color(0xFF7E8AA3),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-
-            PixelStatCard(
-                title = s.arms,
-                subtitle = s.armsSubtitle,
-                value = playerStats.armsReps,
-                iconRes = R.drawable.icon_arms,
-                accent = Color(0xFFB8FF5C)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            PixelStatCard(
-                title = s.shoulders,
-                subtitle = s.shouldersSubtitle,
-                value = playerStats.shouldersReps,
-                iconRes = R.drawable.icon_shoulders,
-                accent = Color(0xFF5CE1FF)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            PixelStatCard(
-                title = s.back,
-                subtitle = s.backSubtitle,
-                value = playerStats.backReps,
-                iconRes = R.drawable.icon_back,
-                accent = Color(0xFFC49BFF)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            PixelStatCard(
-                title = s.chest,
-                subtitle = s.chestSubtitle,
-                value = playerStats.chestReps,
-                iconRes = R.drawable.icon_chest,
-                accent = Color(0xFFFF8A65)
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-        }
-    }
-}
-
-
-
-@Composable
-private fun WorkoutComparisonCard(history: List<WorkoutRecord>, language: AppLanguage) {
-    val s = strings(language)
-    val panel = Color(0xFF111E30)
-    val text = Color(0xFFE7F0FF)
-    val secondary = Color(0xFF8194AD)
-    val accent = Color(0xFFB8FF5C)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(panel, RoundedCornerShape(10.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-    ) {
-        Text(
-            text = s.workoutComparison,
-            color = secondary,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        if (history.isEmpty()) {
-            Text(
-                text = s.comparisonEmpty,
-                color = text,
-                fontSize = 12.sp
-            )
-        } else {
-            val latest = history[0]
-            val latestTotal = latest.pullUps + latest.dips + latest.pushUps
-            val previous = history.getOrNull(1)
-            val previousTotal = previous?.let { it.pullUps + it.dips + it.pushUps }
-            val difference = if (previousTotal != null) latestTotal - previousTotal else 0
-            val differenceColor = when {
-                previousTotal == null -> secondary
-                difference > 0 -> Color(0xFF5CE1A0)
-                difference < 0 -> Color(0xFFFF6B78)
-                else -> secondary
-            }
-            val changeText = when {
-                previousTotal == null -> s.newStats
-                difference > 0 -> "↑ +$difference"
-                difference < 0 -> "↓ $difference"
-                else -> "→ 0"
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = s.lastWorkout,
-                        color = secondary,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = s.reps(latestTotal),
-                        color = text,
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    if (previousTotal != null) {
-                        Text(
-                            text = s.previous(previousTotal),
-                            color = secondary,
-                            fontSize = 11.sp
-                        )
-                    } else {
-                        Text(
-                            text = s.nextWorkoutDifference,
-                            color = secondary,
-                            fontSize = 11.sp
+                    if (screen.isTab) {
+                        val today = dayKey(System.currentTimeMillis())
+                        BottomNav(
+                            current = screen,
+                            trainedToday = history.any { dayKey(it.timestamp) == today },
+                            shopBadge = state.loaded && state.dailyChestDay != today,
+                            achievementsBadge = state.favoriteAchievements.isEmpty() && achievements.any { it.unlocked } && false,
+                            onSelect = { screen = it; if (it != Screen.INVENTORY) slotFilter = null },
+                            onWorkout = { screen = Screen.WORKOUT },
                         )
                     }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = changeText,
-                        color = differenceColor,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(
-                        text = if (previousTotal == null) "" else s.comparedToPrevious,
-                        color = secondary,
-                        fontSize = 10.sp
-                    )
-                }
+                ToastHost(toasts)
             }
         }
     }
 }
 
-
 @Composable
-fun PixelHero(equippedItemIds: Set<String> = emptySet()) {
-    val transition = rememberInfiniteTransition(label = "hero_idle")
-    val bob by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = -5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "hero_bob"
-    )
-
-    Box(
-        modifier = Modifier
-            .height(176.dp)
-            .fillMaxWidth(0.48f)
-            .graphicsLayer {
-                translationY = bob
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.hero_base),
-            contentDescription = "Пиксельный персонаж IronQuest",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
-
-        val overlayResources = buildList {
-            if (equippedItemIds.contains("forest_armor") || equippedItemIds.contains("vanguard_armor") || equippedItemIds.contains("night_armor")) {
-                add(R.drawable.gear_armor)
-            }
-            if (equippedItemIds.contains("worn_gloves") ||
-                equippedItemIds.contains("steel_bracer") || equippedItemIds.contains("training_gloves") ||
-                equippedItemIds.contains("royal_gauntlets") || equippedItemIds.contains("ember_gloves")
-            ) {
-                add(R.drawable.gear_gloves)
-            }
-            if (equippedItemIds.contains("traveler_boots") || equippedItemIds.contains("swift_boots") ||
-                equippedItemIds.contains("storm_boots") || equippedItemIds.contains("iron_greaves")) {
-                add(R.drawable.gear_boots)
-            }
-            if (equippedItemIds.contains("iron_helmet") ||
-                equippedItemIds.contains("legendary_crown") || equippedItemIds.contains("ranger_hood") ||
-                equippedItemIds.contains("guardian_helm")
-            ) {
-                add(R.drawable.gear_helmet)
-            }
-        }
-
-        overlayResources.forEach { resource ->
-            Image(
-                painter = painterResource(id = resource),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-        }
+private fun LoadingScreen() {
+    val pal = LocalPalette.current
+    val t = rememberInfiniteTransition(label = "load")
+    val bob by t.animateFloat(0f, -8f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "b")
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        PixelIcon("sword", 64.dp, modifier = Modifier.graphicsLayer { translationY = bob * density })
+        Spacer(Modifier.height(16.dp))
+        TitleText("IRONQUEST", size = 18.sp, color = pal.accent)
+        Spacer(Modifier.height(8.dp))
+        PText(tr("Загрузка подземелья...", "Loading the dungeon..."), color = pal.muted)
     }
 }
 
-
-@Composable
-private fun TopGameIcon(iconRes: Int, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(
-        modifier = modifier.height(82.dp).background(Color(0xFF111E30), RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick).padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Image(painter = painterResource(iconRes), contentDescription = label, modifier = Modifier.size(40.dp))
-        Spacer(Modifier.height(4.dp))
-        Text(label, color = Color(0xFFB8C7DD), fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-    }
+/** Иконка достижения → ключ для PixelIcon. */
+fun achievementIcon(icon: String): String = when {
+    icon.startsWith("ui:") -> icon.removePrefix("ui:")
+    else -> icon
 }
 
 @Composable
-fun PixelStatCard(
-    title: String,
-    subtitle: String,
-    value: Int,
-    iconRes: Int,
-    accent: Color
+private fun BottomNav(
+    current: Screen,
+    trainedToday: Boolean,
+    shopBadge: Boolean,
+    achievementsBadge: Boolean,
+    onSelect: (Screen) -> Unit,
+    onWorkout: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
+    val pal = LocalPalette.current
+    val haptic = rememberHaptic()
+    Box(
+        Modifier
             .fillMaxWidth()
-            .background(Color(0xFF111E30), RoundedCornerShape(8.dp))
-            .padding(horizontal = 13.dp, vertical = 12.dp)
+            .drawBehind {
+                val p = 3.dp.toPx()
+                drawRect(pal.border, Offset(0f, 0f), Size(size.width, size.height))
+                drawRect(pal.panel, Offset(0f, p), Size(size.width, size.height - p))
+                drawRect(lerp(pal.panel, Color.White, 0.14f), Offset(0f, p), Size(size.width, p))
+            }
+            .navigationBarsPadding()
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            Modifier.fillMaxWidth().height(68.dp).padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceAround,
         ) {
-            Box(
-                modifier = Modifier
-                    .background(accent.copy(alpha = 0.13f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-            ) {
-                Image(
-                    painter = painterResource(iconRes),
-                    contentDescription = title,
-                    modifier = Modifier.size(35.dp)
-                )
-            }
-            Spacer(modifier = Modifier.padding(start = 4.dp))
-            Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                Text(
-                    text = title,
-                    color = Color(0xFFE7F0FF),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.8.sp
-                )
-                Text(
-                    text = subtitle,
-                    color = Color(0xFF7E8AA3),
-                    fontSize = 10.sp
-                )
-            }
-            Text(
-                text = value.toString(),
-                color = accent,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Black
-            )
+            NavItem("castle", tr("ГЕРОЙ", "HERO"), current == Screen.HOME, Modifier.weight(1f)) { onSelect(Screen.HOME) }
+            NavItem("backpack", tr("СУМКА", "BAG"), current == Screen.INVENTORY, Modifier.weight(1f)) { onSelect(Screen.INVENTORY) }
+            Spacer(Modifier.weight(1.2f))
+            NavItem("shop", tr("ЛАВКА", "SHOP"), current == Screen.SHOP, Modifier.weight(1f), badge = shopBadge) { onSelect(Screen.SHOP) }
+            NavItem("trophy", tr("НАГРАДЫ", "AWARDS"), current == Screen.ACHIEVEMENTS, Modifier.weight(1f), badge = achievementsBadge) { onSelect(Screen.ACHIEVEMENTS) }
         }
-    }
-}
-
-@Composable
-fun ProgressCard(
-    title: String,
-    value: String,
-    panel: Color,
-    text: Color,
-    secondaryText: Color
-) {
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                panel,
-                RoundedCornerShape(6.dp)
-            )
-            .padding(
-                horizontal = 16.dp,
-                vertical = 14.dp
-            ),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-
-        Text(
-            text = title,
-            color = text,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = value,
-            color = secondaryText,
-            fontSize = 15.sp
-        )
-    }
-}
-
-@Composable
-fun WorkoutResultScreen(
-    language: AppLanguage = AppLanguage.RU,
-    xp: Int,
-    totalXp: Int,
-    droppedItem: ItemDefinition?,
-    coinsEarned: Int,
-    onContinue: () -> Unit
-) {
-    val s = strings(language)
-
-    val background = Color(0xFF080F1B)
-    val panel = Color(0xFF111E30)
-    val accent = Color(0xFFB8FF5C)
-    val text = Color(0xFFE7F0FF)
-    val secondaryText = Color(0xFF8194AD)
-
-    // Use the same progression calculation as the home screen.
-    val levelInfo = getLevelInfo(totalXp)
-    val level = levelInfo.level
-    val currentLevelXp = levelInfo.currentXp
-    val requiredLevelXp = levelInfo.requiredXp
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(background)
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-
-        Spacer(
-            modifier = Modifier.height(50.dp)
-        )
-
-        Text(
-            text = s.workout,
-            color = accent,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = s.completed,
-            color = text,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(
-            modifier = Modifier.height(45.dp)
-        )
-
-        Text(
-            text = "+$xp XP",
-            color = accent,
-            fontSize = 40.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(
-            modifier = Modifier.height(15.dp)
-        )
-
-        Text(
-            text = s.greatWork,
-            color = secondaryText,
-            fontSize = 16.sp
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-        Box(
-            modifier = Modifier
-                .background(Color(0xFF302A1B), RoundedCornerShape(8.dp))
-                .padding(horizontal = 18.dp, vertical = 10.dp)
-        ) {
-            Text(
-                text = s.coinsForWorkout(coinsEarned),
-                color = Color(0xFFFFC84A),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Black
-            )
-        }
-
-        if (droppedItem != null) {
-            Spacer(modifier = Modifier.height(18.dp))
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF1A2A40), RoundedCornerShape(8.dp))
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = s.itemFound,
-                    color = droppedItem.rarity.color,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Black
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(painter = painterResource(droppedItem.iconRes), contentDescription = droppedItem.name(language), modifier = Modifier.size(42.dp))
-                    Text(droppedItem.name(language), color = Color(0xFFE7F0FF), fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                }
-                Text(
-                    text = droppedItem.rarity.label(language),
-                    color = droppedItem.rarity.color,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        } else {
-            Spacer(modifier = Modifier.height(18.dp))
-            Text(
-                text = s.noItemDropped,
-                color = secondaryText,
-                fontSize = 12.sp
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(25.dp)
-        )
-
+        // центральная кнопка тренировки
+        val pulse = rememberInfiniteTransition(label = "fight")
+        val scale by pulse.animateFloat(1f, if (trainedToday) 1f else 1.07f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "s")
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    panel,
-                    RoundedCornerShape(6.dp)
-                )
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = (-20).dp)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clickable(role = Role.Button) { haptic(HapticFeedbackType.LongPress); onWorkout() },
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-
-            Text(
-                text = s.level(level),
-                color = text,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(
-                modifier = Modifier.height(10.dp)
-            )
-
-            Text(
-                text = "$currentLevelXp / $requiredLevelXp XP",
-                color = secondaryText,
-                fontSize = 14.sp
-            )
-
-            Spacer(
-                modifier = Modifier.height(10.dp)
-            )
-
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(14.dp)
-                    .background(
-                        Color(0xFF223148),
-                        RoundedCornerShape(4.dp)
-                    )
-            ) {
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(
-                            (currentLevelXp.toFloat() / requiredLevelXp.toFloat()).coerceIn(0f, 1f)
-                        )
-                        .height(14.dp)
-                        .background(
-                            accent,
-                            RoundedCornerShape(4.dp)
-                        )
-                )
-            }
+                Modifier
+                    .size(70.dp)
+                    .pixelFrame(pal.accent, lerp(pal.accent, Color.White, 0.4f), lerp(pal.accent, Color.Black, 0.4f), pal.border, 4.dp),
+                contentAlignment = Alignment.Center,
+            ) { PixelIcon("sword", 40.dp) }
+            Spacer(Modifier.height(2.dp))
+            TitleText(tr("В БОЙ", "FIGHT"), size = 8.sp, color = pal.accent, align = TextAlign.Center)
         }
+    }
+}
 
-        Spacer(
-            modifier = Modifier.weight(1f)
-        )
-
-        Button(
-            onClick = onContinue,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp),
-            shape = RoundedCornerShape(6.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = accent
-            )
-        ) {
-
-            Text(
-                text = s.backToMenu,
-                color = Color.Black,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
-            )
+@Composable
+private fun NavItem(icon: String, label: String, selected: Boolean, modifier: Modifier, badge: Boolean = false, onClick: () -> Unit) {
+    val pal = LocalPalette.current
+    val haptic = rememberHaptic()
+    val lift by androidx.compose.animation.core.animateDpAsState(if (selected) (-4).dp else 0.dp, label = "lift")
+    Column(
+        modifier
+            .height(64.dp)
+            .clickable(role = Role.Tab) { haptic(HapticFeedbackType.TextHandleMove); onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(Modifier.offset(y = lift)) {
+            PixelIcon(icon, 28.dp, disabled = !selected, alpha = if (selected) 1f else 0.9f)
+            if (badge) Box(Modifier.align(Alignment.TopEnd).size(8.dp).drawBehind { drawRect(pal.danger) })
         }
+        Spacer(Modifier.height(4.dp))
+        PText(label, size = 12.sp, bold = true, color = if (selected) pal.accent else pal.muted, maxLines = 1)
     }
 }

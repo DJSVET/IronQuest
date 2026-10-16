@@ -1,12 +1,12 @@
 package com.example.ironquest
 
 import android.Manifest
-import android.app.Activity
 import android.app.TimePickerDialog
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,100 +17,73 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Divider
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import java.util.Locale
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(
-    language: AppLanguage = AppLanguage.RU,
+    state: PlayerState,
+    haptics: Boolean,
     onBack: () -> Unit,
-    onLanguageChange: (AppLanguage) -> Unit = {},
-    onResetProgress: () -> Unit
+    onLanguageChange: (AppLanguage) -> Unit,
+    onHapticsChange: (Boolean) -> Unit,
+    onSaveRestDays: (Set<Int>) -> Unit,
+    onResetProgress: () -> Unit,
 ) {
     val context = LocalContext.current
-    val s = strings(language)
+    val pal = LocalPalette.current
+    val lang = LocalLanguage.current
+    val scope = rememberCoroutineScope()
     val prefs = remember { ReminderSettings.preferences(context) }
-    val background = Color(0xFF080F1B)
-    val panel = Color(0xFF111E30)
-    val accent = Color(0xFFB8FF5C)
-    val text = Color(0xFFE7F0FF)
-    val secondary = Color(0xFF8194AD)
 
-    var showResetDialog by remember { mutableStateOf(false) }
+    var showReset by remember { mutableStateOf(false) }
+    var showRest by remember { mutableStateOf(false) }
+    var showHero by remember { mutableStateOf(false) }
     var workoutReminder by remember { mutableStateOf(ReminderSettings.workoutEnabled(context)) }
     var streakReminder by remember { mutableStateOf(ReminderSettings.streakEnabled(context)) }
     var hour by remember { mutableStateOf(ReminderSettings.hour(context)) }
     var minute by remember { mutableStateOf(ReminderSettings.minute(context)) }
     var permissionMessage by remember { mutableStateOf("") }
-    var updateMessage by remember(language) { mutableStateOf(s.updatePrompt) }
+    var updateMessage by remember(lang) { mutableStateOf(tr(lang, "Нажми, чтобы проверить последнюю версию на GitHub", "Tap to check the latest version on GitHub")) }
     var updateRelease by remember { mutableStateOf<ReleaseUpdate?>(null) }
-    var checkingUpdate by remember { mutableStateOf(false) }
+    var checking by remember { mutableStateOf(false) }
     var updateNotifications by remember { mutableStateOf(prefs.getBoolean("update_notifications_enabled", true)) }
-    val scope = rememberCoroutineScope()
+    val versionName = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "—" }
 
-    fun checkForUpdates() {
-        if (checkingUpdate) return
-        checkingUpdate = true
-        updateMessage = s.updateChecking
-        scope.launch {
-            try {
-                val currentVersion = context.packageManager
-                    .getPackageInfo(context.packageName, 0).versionName ?: "v0.4"
-                val release = ReleaseUpdateChecker.check(currentVersion)
-                updateRelease = release
-                updateMessage = if (release == null) {
-                    s.updateLatest
-                } else {
-                    s.updateAvailable(release.version)
-                }
-            } catch (_: Exception) {
-                updateMessage = s.updateFailed
-            } finally {
-                checkingUpdate = false
-            }
-        }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        permissionMessage = if (granted) tr(lang, "Уведомления разрешены", "Notifications allowed")
+        else tr(lang, "Разреши уведомления в настройках Android, чтобы получать напоминания", "Allow notifications in Android settings to get reminders")
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        permissionMessage = if (granted) s.notificationGranted else s.notificationDenied
-    }
-
-    fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
+    fun requestPermission() {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
-    fun saveAndReschedule() {
+    fun saveReminders() {
         prefs.edit()
             .putBoolean(ReminderSettings.KEY_WORKOUT_ENABLED, workoutReminder)
             .putBoolean(ReminderSettings.KEY_STREAK_ENABLED, streakReminder)
@@ -120,241 +93,192 @@ fun SettingsScreen(
         ReminderScheduler.update(context)
     }
 
-    if (updateRelease != null) {
-        AlertDialog(
-            onDismissRequest = { updateRelease = null },
-            title = { Text(s.updateDialogTitle) },
-            text = { Text(s.updateDialogText(updateRelease!!.version)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val release = updateRelease!!
-                    val url = release.apkUrl ?: release.url
-                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
-                    updateRelease = null
-                }) { Text(if (updateRelease!!.apkUrl != null) s.downloadApk else s.openRelease) }
-            },
-            dismissButton = { TextButton(onClick = { updateRelease = null }) { Text(s.later) } },
-            containerColor = panel,
-            titleContentColor = text,
-            textContentColor = secondary
-        )
+    fun checkUpdates() {
+        if (checking) return
+        checking = true
+        updateMessage = tr(lang, "Проверяем GitHub Releases...", "Checking GitHub Releases...")
+        scope.launch {
+            try {
+                val release = ReleaseUpdateChecker.check(versionName)
+                updateRelease = release
+                updateMessage = if (release == null) tr(lang, "Установлена последняя версия", "You have the latest version")
+                else tr(lang, "Доступно обновление: v${release.version}", "Update available: v${release.version}")
+            } catch (_: Exception) {
+                updateMessage = tr(lang, "Не удалось проверить. Проверь интернет.", "Couldn't check. Check your connection.")
+            } finally {
+                checking = false
+            }
+        }
     }
 
-    if (showResetDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = { Text(s.resetTitle) },
-            text = { Text(s.resetText) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showResetDialog = false
-                    onResetProgress()
-                }) { Text(s.resetConfirm, color = Color(0xFFFF5964)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) { Text(s.cancel) }
-            },
-            containerColor = panel,
-            titleContentColor = text,
-            textContentColor = secondary
-        )
-    }
-
-    Column(
-        modifier = Modifier.fillMaxSize().background(background).verticalScroll(rememberScrollState()).padding(18.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = onBack,
-                modifier = Modifier.height(40.dp),
-                shape = RoundedCornerShape(6.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF223148))
-            ) {
-                Text("←", color = text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    Column(Modifier.fillMaxSize()) {
+        PixelTopBar(tr("НАСТРОЙКИ", "SETTINGS"), "gear", onBack = onBack)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
+            SectionHeader(tr("ГЕРОЙ", "HERO"), "castle")
+            PixelPanel(Modifier.fillMaxWidth()) {
+                SettingsLink("pencil", tr("Имя и внешность", "Name and look"), state.heroName.ifBlank { tr("Герой", "Hero") }) { showHero = true }
+                Divider()
+                SettingsLink("moon", tr("Выходные дни", "Rest days"),
+                    if (state.restDays.isEmpty()) tr("не выбраны", "none") else WEEK_ORDER.filter { it in state.restDays }.joinToString(", ") { weekdayShort(it, lang) } +
+                        " · ${state.restDays.size}/${state.restDaysUnlocked}") { showRest = true }
             }
-            Spacer(Modifier.weight(1f))
-            Text(s.settings, color = text, fontSize = 21.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-            Spacer(Modifier.weight(1f))
-            Box(modifier = Modifier.padding(start = 36.dp))
-        }
 
-        Text(s.language, color = accent, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
-        Spacer(Modifier.height(10.dp))
-        Column(modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(10.dp)).padding(14.dp)) {
-            Text(s.chooseLanguage, color = secondary, fontSize = 12.sp)
-            Spacer(Modifier.height(10.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AppLanguage.values().forEach { option ->
-                    val selected = language == option
-                    Text(
-                        text = option.nativeName,
-                        color = if (selected) Color(0xFF080F1B) else secondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(if (selected) accent else Color(0xFF223148), RoundedCornerShape(8.dp))
-                            .clickable { onLanguageChange(option) }
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
-                    )
+            SectionHeader(tr("ЯЗЫК", "LANGUAGE"), "globe")
+            PixelPanel(Modifier.fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppLanguage.values().forEach { option ->
+                        PixelChip(option.nativeName, lang == option, { onLanguageChange(option) }, Modifier.weight(1f))
+                    }
                 }
             }
-        }
 
-        Spacer(Modifier.height(22.dp))
-        Text(s.notifications, color = accent, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
-        Spacer(Modifier.height(10.dp))
-        Column(modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(10.dp)).padding(14.dp)) {
-            SettingsSwitchRow(
-                title = s.remindWorkout,
-                subtitle = s.remindWorkoutSub,
-                checked = workoutReminder,
-                onCheckedChange = {
-                    workoutReminder = it
-                    if (it) requestNotificationPermissionIfNeeded()
-                    saveAndReschedule()
-                },
-                accent = accent,
-                text = text,
-                secondary = secondary
-            )
-            Divider(color = Color(0xFF29384D), modifier = Modifier.padding(vertical = 8.dp))
-            SettingsSwitchRow(
-                title = s.protectStreak,
-                subtitle = s.protectStreakSub,
-                checked = streakReminder,
-                onCheckedChange = {
-                    streakReminder = it
-                    if (it) requestNotificationPermissionIfNeeded()
-                    saveAndReschedule()
-                },
-                accent = accent,
-                text = text,
-                secondary = secondary
-            )
-            Divider(color = Color(0xFF29384D), modifier = Modifier.padding(vertical = 8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable {
-                    TimePickerDialog(
-                        context,
-                        { _, selectedHour, selectedMinute ->
-                            hour = selectedHour
-                            minute = selectedMinute
-                            saveAndReschedule()
-                        },
-                        hour,
-                        minute,
-                        true
-                    ).show()
-                }.padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(s.reminderTime, color = text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Text(s.reminderTimeSub, color = secondary, fontSize = 11.sp)
+            SectionHeader(tr("УВЕДОМЛЕНИЯ", "NOTIFICATIONS"), "bell")
+            PixelPanel(Modifier.fillMaxWidth()) {
+                SwitchRow(tr("Напоминать о тренировке", "Workout reminder"), tr("Каждый день в выбранное время", "Every day at the chosen time"), workoutReminder) {
+                    workoutReminder = it; if (it) requestPermission(); saveReminders()
                 }
-                Text(String.format(Locale.getDefault(), "%02d:%02d", hour, minute), color = accent, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                Divider()
+                SwitchRow(tr("Беречь серию", "Protect streak"), tr("Напомнит, если сегодня ещё не было тренировки (не в выходной)", "Reminds you if you haven't trained today (not on rest days)"), streakReminder) {
+                    streakReminder = it; if (it) requestPermission(); saveReminders()
+                }
+                Divider()
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable {
+                        TimePickerDialog(context, { _, h, m -> hour = h; minute = m; saveReminders() }, hour, minute, true).show()
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PixelIcon("hourglass", 22.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        PText(tr("Время напоминания", "Reminder time"), bold = true)
+                        PText(tr("Нажми, чтобы изменить", "Tap to change"), color = pal.muted, size = 13.sp)
+                    }
+                    TitleText(String.format(Locale.getDefault(), "%02d:%02d", hour, minute), size = 13.sp, color = pal.accent)
+                }
+                if (permissionMessage.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    PText(permissionMessage, color = pal.muted, size = 13.sp)
+                }
             }
-        }
 
-        if (permissionMessage.isNotBlank()) {
-            Spacer(Modifier.height(8.dp))
-            Text(permissionMessage, color = secondary, fontSize = 11.sp)
-        }
+            SectionHeader(tr("ОЩУЩЕНИЯ", "FEEL"), "sparkle")
+            PixelPanel(Modifier.fillMaxWidth()) {
+                SwitchRow(tr("Вибрация", "Haptics"), tr("Отклик кнопок, щелчки рулетки, конец отдыха", "Button feedback, reel ticks, rest timer end"), haptics, onHapticsChange)
+            }
 
-        Spacer(Modifier.height(22.dp))
-        Text(s.updates, color = accent, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
-        Spacer(Modifier.height(10.dp))
-        Column(modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(10.dp)).padding(14.dp)) {
-            SettingsSwitchRow(
-                title = s.updateNotifications,
-                subtitle = s.updateNotificationsSub,
-                checked = updateNotifications,
-                onCheckedChange = { enabled ->
+            SectionHeader(tr("ОБНОВЛЕНИЯ", "UPDATES"), "arrow_up")
+            PixelPanel(Modifier.fillMaxWidth()) {
+                SwitchRow(tr("Сообщать о новых версиях", "Notify about new versions"), tr("Проверять GitHub Releases раз в сутки", "Check GitHub Releases once a day"), updateNotifications) { enabled ->
                     updateNotifications = enabled
                     prefs.edit().putBoolean("update_notifications_enabled", enabled).apply()
-                    if (enabled) {
-                        requestNotificationPermissionIfNeeded()
-                        UpdateCheckScheduler.schedule(context.applicationContext)
-                    }
-                },
-                accent = accent,
-                text = text,
-                secondary = secondary
-            )
-            Divider(color = Color(0xFF29384D), modifier = Modifier.padding(vertical = 8.dp))
-            Text(updateMessage, color = secondary, fontSize = 12.sp)
-            Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = { checkForUpdates() },
-                enabled = !checkingUpdate,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = accent, disabledContainerColor = Color(0xFF64705A))
-            ) {
-                Text(if (checkingUpdate) s.checking else s.checkUpdates, color = Color.Black, fontWeight = FontWeight.Bold)
+                    if (enabled) { requestPermission(); UpdateCheckScheduler.schedule(context.applicationContext) }
+                }
+                Divider()
+                PText(updateMessage, color = pal.muted, size = 14.sp)
+                Spacer(Modifier.height(10.dp))
+                PixelButton(if (checking) tr("ПРОВЕРКА...", "CHECKING...") else tr("ПРОВЕРИТЬ", "CHECK"), { checkUpdates() }, Modifier.fillMaxWidth(),
+                    enabled = !checking, height = 48.dp, fontSize = 9.sp, icon = "arrow_up")
             }
-        }
 
-        Spacer(Modifier.height(22.dp))
-        Text(s.aboutApp, color = accent, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
-        Spacer(Modifier.height(10.dp))
-        Column(modifier = Modifier.fillMaxWidth().background(panel, RoundedCornerShape(10.dp)).padding(14.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(s.appVersion, color = text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.weight(1f))
-                Text(context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "—", color = accent, fontSize = 14.sp, fontWeight = FontWeight.Black)
+            SectionHeader(tr("О ПРИЛОЖЕНИИ", "ABOUT"), "info")
+            PixelPanel(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PText(tr("Версия", "Version"), bold = true, modifier = Modifier.weight(1f))
+                    PText(versionName, color = pal.accent, bold = true)
+                }
+                Divider()
+                SettingsLink("globe", tr("GitHub проекта", "Project GitHub"), "DJSVET/IronQuest") {
+                    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/DJSVET/IronQuest"))) }
+                }
+                Divider()
+                PText(tr("Шрифты: Press Start 2P и Tiny5 (SIL Open Font License).", "Fonts: Press Start 2P and Tiny5 (SIL Open Font License)."), color = pal.muted, size = 12.sp)
             }
-            Divider(color = Color(0xFF29384D), modifier = Modifier.padding(vertical = 10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable {
-                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/DJSVET/IronQuest"))
-                    context.startActivity(intent)
-                }.padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(s.projectGithub, color = text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.weight(1f))
-                Text("${s.open} ↗", color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            }
+
+            SectionHeader(tr("ОПАСНАЯ ЗОНА", "DANGER ZONE"), "skull")
+            PixelButton(tr("СБРОСИТЬ ВСЁ", "RESET ALL"), { showReset = true }, Modifier.fillMaxWidth(), color = pal.danger, textColor = Color.White, icon = "trash", fontSize = 10.sp)
+            Spacer(Modifier.height(12.dp))
+            PText(tr("Настройки хранятся на устройстве. Android может немного сдвигать время уведомлений.",
+                "Settings are stored on this device. Android may slightly delay notifications."), color = pal.muted, size = 13.sp)
         }
-        Spacer(Modifier.height(22.dp))
-        Text(s.dangerZone, color = Color(0xFFFF5964), fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
-        Spacer(Modifier.height(10.dp))
-        Button(
-            onClick = { showResetDialog = true },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8F2634))
-        ) {
-            Text(s.resetAllData, color = Color.White, fontWeight = FontWeight.Black)
-        }
-        Spacer(Modifier.height(20.dp))
-        Text(
-            s.settingsNote,
-            color = secondary,
-            fontSize = 11.sp
+    }
+
+    updateRelease?.let { release ->
+        ConfirmDialog(
+            tr("ДОСТУПНО ОБНОВЛЕНИЕ", "UPDATE AVAILABLE"),
+            tr("Версия v${release.version} опубликована на GitHub.", "Version v${release.version} is published on GitHub."),
+            if (release.apkUrl != null) tr("СКАЧАТЬ", "DOWNLOAD") else tr("ОТКРЫТЬ", "OPEN"),
+            onConfirm = {
+                runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(release.apkUrl ?: release.url))) }
+                updateRelease = null
+            },
+            onDismiss = { updateRelease = null }, icon = "arrow_up", cancel = tr("ПОЗЖЕ", "LATER"),
         )
+    }
+    if (showReset) {
+        ConfirmDialog(
+            tr("СБРОСИТЬ ПРОГРЕСС?", "RESET PROGRESS?"),
+            tr("Будут удалены уровень, опыт, история, достижения, монеты, предметы, темы и свои упражнения. Отменить нельзя.",
+                "Level, XP, history, achievements, coins, items, themes and custom exercises will be deleted. This can't be undone."),
+            tr("СБРОСИТЬ", "RESET"), onConfirm = { showReset = false; onResetProgress() }, onDismiss = { showReset = false }, icon = "skull", danger = true,
+        )
+    }
+    if (showRest) RestDaysDialog(state, onDismiss = { showRest = false }, onSave = { onSaveRestDays(it); showRest = false })
+    if (showHero) HeroEditDialog(state, onDismiss = { showHero = false }, onSave = { n, l ->
+        scope.launch { PlayerData.setHeroName(context, n); PlayerData.setHeroLook(context, l) }
+        showHero = false
+    })
+}
+
+@Composable
+private fun Divider() {
+    val pal = LocalPalette.current
+    Box(Modifier.fillMaxWidth().padding(vertical = 10.dp).height(2.dp).background(pal.panelLo))
+}
+
+@Composable
+private fun SettingsLink(icon: String, title: String, value: String, onClick: () -> Unit) {
+    val pal = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { onClick() },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PixelIcon(icon, 22.dp)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            PText(title, bold = true)
+            PText(value, color = pal.muted, size = 13.sp, maxLines = 1)
+        }
+        PText("›", color = pal.accent, size = 22.sp, bold = true)
     }
 }
 
 @Composable
-private fun SettingsSwitchRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    accent: Color,
-    text: Color,
-    secondary: Color
-) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-            Text(title, color = text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(3.dp))
-            Text(subtitle, color = secondary, fontSize = 11.sp)
+private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val pal = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(role = Role.Switch) { onChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).padding(end = 10.dp)) {
+            PText(title, bold = true)
+            PText(subtitle, color = pal.muted, size = 13.sp)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        PixelSwitch(checked)
+    }
+}
+
+/** Пиксельный переключатель. */
+@Composable
+fun PixelSwitch(checked: Boolean) {
+    val pal = LocalPalette.current
+    val x by animateDpAsState(if (checked) 24.dp else 0.dp, label = "sw")
+    Box(Modifier.width(52.dp).height(28.dp).insetFrame(if (checked) lerp(pal.inset, pal.accent, 0.45f) else pal.inset)) {
+        Box(
+            Modifier
+                .offset(x = x)
+                .size(28.dp)
+                .pixelFrame(if (checked) pal.accent else pal.muted, Color.White.copy(alpha = 0.5f), Color.Black.copy(alpha = 0.3f), pal.border, 2.dp)
+        )
     }
 }

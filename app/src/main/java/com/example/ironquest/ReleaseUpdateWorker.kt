@@ -70,7 +70,7 @@ class ReleaseUpdateWorker(context: Context, params: WorkerParameters) : Coroutin
             val prefs = applicationContext.getSharedPreferences("ironquest_update_notifications", Context.MODE_PRIVATE)
             if (prefs.getString("last_notified_version", null) == release.version) return Result.success()
 
-            val s = strings(AppPreferences.getLanguage(applicationContext))
+            val lang = AppPreferences.getLanguage(applicationContext)
             createChannel()
             val openRelease = Intent(Intent.ACTION_VIEW, Uri.parse(release.url))
             val pendingIntent = PendingIntent.getActivity(
@@ -80,13 +80,13 @@ class ReleaseUpdateWorker(context: Context, params: WorkerParameters) : Coroutin
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             val message = if (release.apkUrl != null) {
-                s.updateNotificationApkMessage(release.version)
+                tr(lang, "Версия ${release.version} уже доступна. Нажми, чтобы скачать APK.", "Version ${release.version} is available. Tap to download the APK.")
             } else {
-                s.updateNotificationReleaseMessage(release.version)
+                tr(lang, "Версия ${release.version} уже на GitHub. Нажми, чтобы посмотреть.", "Version ${release.version} is on GitHub. Tap to view.")
             }
             val notification = NotificationCompat.Builder(applicationContext, "ironquest_updates")
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle(s.updateNotificationTitle)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(tr(lang, "Доступно обновление IronQuest", "IronQuest update available"))
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
                 .setContentIntent(pendingIntent)
@@ -109,12 +109,12 @@ class ReleaseUpdateWorker(context: Context, params: WorkerParameters) : Coroutin
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val s = strings(AppPreferences.getLanguage(applicationContext))
+            val lang = AppPreferences.getLanguage(applicationContext)
             val channel = NotificationChannel(
                 "ironquest_updates",
-                s.updateChannelName,
+                tr(lang, "Обновления IronQuest", "IronQuest updates"),
                 NotificationManager.IMPORTANCE_DEFAULT
-            ).apply { description = s.updateChannelDescription }
+            ).apply { description = tr(lang, "Уведомления о новых версиях", "New version notifications") }
             val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
